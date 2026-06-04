@@ -1,0 +1,16 @@
+{
+    "name": "XRSDKDemo",
+    "rootNamespace": "",
+    "references": [
+        "GUID:f4137549c0f201345a70b49cc96083ba"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

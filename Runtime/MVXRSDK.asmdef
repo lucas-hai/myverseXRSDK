@@ -1,0 +1,40 @@
+{
+    "name": "MVXRSDK",
+    "rootNamespace": "MyVerseXRSDK",
+    "references": [
+        "Unity.WebRTC",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "Unity.RenderPipelines.Core.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "Google.Protobuf.dll",
+        "System.Runtime.CompilerServices.Unsafe.dll",
+        "zlib.net.dll",
+        "ICSharpCode.SharpZipLib.dll",
+        "Newtonsoft.Json.dll"
+    ],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "com.unity.webrtc",
+            "expression": "[3.0.0,4.0.0)",
+            "define": "MV_WEBRTC_3_0_STABLE"
+        },
+        {
+            "name": "com.unity.render-pipelines.universal",
+            "expression": "[17.0.0,18.0.0)",
+            "define": "MV_URP_17_OR_NEWER"
+        },
+        {
+            "name": "com.unity.render-pipelines.core",
+            "expression": "[17.0.0,18.0.0)",
+            "define": "MV_SRP_CORE_17_OR_NEWER"
+        }
+    ],
+    "noEngineReferences": false
+}
