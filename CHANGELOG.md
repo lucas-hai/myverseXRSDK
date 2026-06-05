@@ -6,6 +6,18 @@
 
 ---
 
+## [2.0.1] - 2026-06-05
+
+### Changed
+- `UnRegisterXROffsetNode` 注销时连带注销挂在 XR 子树下的自身节点，清掉内部悬挂引用（Self 独立挂载不受影响）；配合既有的障碍物 / 远端玩家虚影自动清理，适配"切场景销毁整个 XR Origin"用法
+- 场景根节点偏移应用时打印更新前后坐标（节点名 + pos/rot 前后值），覆盖服务端推送（`OnOffsetChanged`）与注册时缓存回放（`RegisterSceneRootNode`）两条路径
+
+### Fixed
+- `NetworkTransform` 远端角色距离检测读 `MVXRSDK.SelfTransform` 缺 null 检查：自身节点未注册 / 已随 XR 销毁时抛 MissingReferenceException，补判空跳过（对齐 `SpaceObstacles`）
+- `SpaceObstaclesModule.ClearAll` 入池前判空，避免障碍物 GO 已随 XR 子树销毁时把已销毁对象推入对象池
+
+---
+
 ## [2.0.0] - 2026-05-21
 
 ### BREAKING

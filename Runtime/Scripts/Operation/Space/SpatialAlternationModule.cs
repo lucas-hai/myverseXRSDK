@@ -47,9 +47,14 @@ namespace MyVerseXRSDK
             // 回放：若 Store 已有缓存，立即对新节点应用一次（不影响其它已注册节点）
             if (m_Store.LatestOffset.HasValue && m_Store.LatestRotation.HasValue)
             {
-                node.localPosition    = m_Store.LatestOffset.Value;
-                node.localEulerAngles = m_Store.LatestRotation.Value;
-                MVXRSDKLog.Info($"RegisterSceneRootNode: 节点 {node.name} 已按 Store 缓存回放偏移");
+                var cachedOffset   = m_Store.LatestOffset.Value;
+                var cachedRotation = m_Store.LatestRotation.Value;
+                // 打印该节点应用缓存偏移前 → 后的坐标
+                MVXRSDKLog.Info($"场景根节点 [{node.name}] 应用缓存偏移: " +
+                                $"pos {node.localPosition.ToString("F3")} → {cachedOffset.ToString("F3")}, " +
+                                $"rot {node.localEulerAngles.ToString("F3")} → {cachedRotation.ToString("F3")}");
+                node.localPosition    = cachedOffset;
+                node.localEulerAngles = cachedRotation;
             }
         }
 
@@ -86,6 +91,10 @@ namespace MyVerseXRSDK
                     m_SceneRootNodes.RemoveAt(i);
                     continue;
                 }
+                // 打印该场景根节点位置更新前 → 更新后的坐标
+                MVXRSDKLog.Info($"场景根节点 [{n.name}] 位置更新: " +
+                                $"pos {n.localPosition.ToString("F3")} → {offset.ToString("F3")}, " +
+                                $"rot {n.localEulerAngles.ToString("F3")} → {rotation.ToString("F3")}");
                 n.localPosition    = offset;
                 n.localEulerAngles = rotation;
             }

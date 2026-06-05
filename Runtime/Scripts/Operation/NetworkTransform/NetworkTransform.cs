@@ -158,10 +158,13 @@ namespace MyVerseXRSDK
 
 
             if (meshRenderer == null) return;
+            // SelfTransform 未注册 / 已随 XR 销毁时无参考点，跳过本次可见性判定（对齐 SpaceObstacles）
+            var self = MVXRSDK.SelfTransform;
+            if (self == null) return;
             rolePos.x = transform.localPosition.x;
             rolePos.y = transform.localPosition.z;
-            m_XRPos.x = MVXRSDK.SelfTransform.localPosition.x;
-            m_XRPos.y = MVXRSDK.SelfTransform.localPosition.z;
+            m_XRPos.x = self.localPosition.x;
+            m_XRPos.y = self.localPosition.z;
             float dx = rolePos.x - m_XRPos.x;
             float dy = rolePos.y - m_XRPos.y;
             float distSqr = dx * dx + dy * dy;

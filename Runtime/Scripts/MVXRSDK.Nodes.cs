@@ -98,6 +98,12 @@ namespace MyVerseXRSDK
             catch (Exception e) { MVXRSDKLog.Error($"OnXROffsetNodeRegistered 订阅者异常: {e}"); }
         }
 
+        /// <summary>
+        /// 注销 XR 偏移节点。未注册时幂等忽略（仅警告日志）。
+        /// 注销会触发障碍物 / 其他玩家虚影模块回收 XR 子树下的 GO；
+        /// 若自身节点（玩家相机）挂在 XR 子树下，则一并注销自身节点，清掉内部悬挂引用。
+        /// 典型用于"切场景时销毁整个 XR Origin"：先调本方法回收 SDK 状态，再销毁 XR GameObject。
+        /// </summary>
         public static void UnRegisterXROffsetNode()
         {
             if (m_XROffsetNode == null)
@@ -105,9 +111,20 @@ namespace MyVerseXRSDK
                 MVXRSDKLog.Warning("UnRegisterXROffsetNode:未注册XR偏移节点,无法注销");
                 return;
             }
+
+            // 自身节点（玩家相机）若挂在 XR 子树下，XR 注销后会被一同销毁，这里连带注销，
+            // 清掉内部悬挂引用，避免后续读到已销毁的 SelfTransform。
+            // Self 独立挂载（不在 XR 下）则保留，维持 XROffset / Self 节点独立性。
+            if (m_SelfTransform != null && m_SelfTransform.IsChildOf(m_XROffsetNode))
+            {
+                MVXRSDKLog.Info("UnRegisterXROffsetNode: 自身节点位于 XR 子树下，连带注销");
+                UnRegisterSelfNode();
+            }
+
             MVXRSDKLog.Info("UnRegisterXROffsetNode:注销XR偏移节点成功");
             m_XROffsetNode = null;
 
+            // 障碍物 / 其他玩家虚影模块订阅此事件，各自回收 XR 子树下的 GO
             try { OnXROffsetNodeUnregistered?.Invoke(); }
             catch (Exception e) { MVXRSDKLog.Error($"OnXROffsetNodeUnregistered 订阅者异常: {e}"); }
         }

@@ -197,7 +197,9 @@ namespace MyVerseXRSDK
         {
             foreach (var kv in m_ObstacleDict)
             {
-                ResSystem.PushGameObjectInPool(GetObstacleKeyName((ObstacleType)kv.Value.data.ModuleId), kv.Value.obstacleGO);
+                // GO 可能已随 XR 子树销毁，判空避免把已销毁对象入池（对齐 ReleaseAllRoles）
+                if (kv.Value.obstacleGO != null)
+                    ResSystem.PushGameObjectInPool(GetObstacleKeyName((ObstacleType)kv.Value.data.ModuleId), kv.Value.obstacleGO);
                 ResSystem.PushObjectInPool(kv.Value);
             }
             m_ObstacleDict.Clear();
