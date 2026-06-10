@@ -6,6 +6,27 @@
 
 ---
 
+## [Unreleased] - 切镜化推流重构
+
+### Breaking Changes
+- `SendDirectorRequest(int, int)` 删除，改为 `SendDirectorRequest(DirectorRequestOptions)` 与自动接源重载 `SendDirectorRequest(DirectorRequestOptions, Camera)`（DirectorInsert 新增 source/record 字段）
+- `MVXRStreamRig` 不再承载画面推流：`mainCamera`/`directorCameras`/`SwitchCameraTemporary`/`RestoreOriginalCamera`/`Ready`/`OnSwitched`/`OnRestored`/`StreamTexture` 删除，仅保留音频采集与 StreamConfigAsset 应用
+- `CameraStreamSource(Camera)` / `RenderTextureStreamSource(RenderTexture)` 构造去宽高参数（InternalRT 固定尺寸）
+- 删除 `CameraStreamCapture`（主相机/第一视角推流由播控承担）
+
+### Added
+- `DirectorSource` 常量（`"unity"`=本机 Unity 游戏内机位；空/`"mr"`=原直播）与 `DirectorRequestOptions`（Source/Lenses/DurationSec/Record 四字段）
+- `OnDirectorRequestResult`：DirectorInsert 受理结果（受理 ≠ 被选中，被选中以 NotifyLive 为准，即 `OnPushStreamStarting`）
+- `OnPushStreamStarting`：会话开始建立（被选中信号），业务在此接源
+- 推流无源启动（推黑帧等待接源）；一相机推流保护（推流中新 `SetStreamSource` 请求丢弃，Warning 日志）
+- 相机销毁自保护：attach 中相机被销毁自动清源推黑帧 + Warning
+
+### Changed
+- InternalRT 固定尺寸（`StreamConfig.StreamMaxLongSide` 按 16:9，默认 1280×720），任意源可热切；`ClearStreamSource` 清黑保留 RT，`Dispose` 才释放
+- `StreamConfig.StreamMaxLongSide` 语义更新为 InternalRT 长边（原语义：推流画面长边上限）
+
+---
+
 ## [2.0.1] - 2026-06-05
 
 ### Changed

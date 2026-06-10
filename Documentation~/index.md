@@ -50,7 +50,7 @@ Package Manager 窗口 → 选中 `MyVerse XR SDK` → `Samples` 标签 → `Dem
 |---|---|
 | `I` | Init SDK | `U` | UnInit SDK |
 | `T` | 自助积分验证 | `R` | StartRecord |
-| `D` | 真链路切镜（SendDirectorRequest + OnDirectorSelected → Rig） | `L` | 本地直切（Rig 跳过中控） |
+| `D` | 真链路切镜（SendDirectorRequest + OnPushStreamStarting → 接源） | `L` | 本地 Debug_SimulateNotifyLive 触发推流 |
 | `K` / `S` | Editor 仿真 NotifyLive 启动/停止（Offline / WsDirect 都能跑） | `X` | 热替换 XR Offset Node |
 | `Y` | 注销 Self Node（演示注销后位姿不上报） | | |
 
@@ -65,7 +65,7 @@ Package Manager 窗口 → 选中 `MyVerse XR SDK` → `Samples` 标签 → `Dem
 | **积分扣除** | `MVXRSDK.OnTransactionVerification` / `TransactionVerification` | 中控启动 / 自助验证两种模式 |
 | **推流** | `MVXRSDK.SetStreamSource` + `OnPushStream*` 事件 | WebRTC（WHIP），由播控通过 NotifyLive 触发 |
 | **录屏信令** | `MVXRSDK.StartRecord(StartRecordOptions)` | 游戏主动触发，SDK 转发到服务端 |
-| **导播切镜头** | `MVXRSDK.SendDirectorRequest` + `OnDirectorSelected` | 多机位切换 |
+| **导播切镜头** | `MVXRSDK.SendDirectorRequest(DirectorRequestOptions)` + `OnPushStreamStarting` | 多机位切换，中控仲裁后被选中才推流 |
 | **全局错误聚合** | `MVXRSDK.OnError` | 一个订阅接所有失败路径 |
 
 ------
@@ -333,45 +333,44 @@ MVXRSDK.ClearStreamSource();
 
 `StreamStopReason` 4 种：`ServerStop` / `UserStop` / `NetworkLost` / `ConfigChanged`。
 
-未调用 `SetStreamSource` 即收到推流通知时，`OnPushStreamFailed(MVXRSDKErrorCode.NoStreamSource, "...")`。
+未调用 `SetStreamSource` 即收到推流通知时，SDK 推黑帧等待业务接源——不会失败，`OnPushStreamStarting` 事件照常触发，业务在回调中调 `SetStreamSource` 接上即出画面。
 
 ------
 
 ### 8.2 画面源（IStreamSource）
 
-SDK 提供两个开箱即用的 `IStreamSource` 实现，业务侧二选一交给 `MVXRSDK.SetStreamSource`：
+SDK 提供两个开箱即用的 `IStreamSource` 实现，业务侧二选一交给 `MVXRSDK.SetStreamSource`。
+
+**v3 变化**：SDK 内部 `InternalRT` 改为固定尺寸（`StreamConfig.StreamMaxLongSide` 按 16:9，默认 1280×720），不再由源决定尺寸——构造时不传宽高参数，任意源可热切，`ClearStreamSource` 后 RT 清黑保留（不释放），下次接源即出画面。
 
 #### 8.2.1 `RenderTextureStreamSource`：业务自己渲染到 RT
 
 ```csharp
-// 业务侧自己用任意方式渲染到 myRT（任意格式、任意尺寸）
+// 业务侧自己用任意方式渲染到 myRT（任意格式）
 var src = new RenderTextureStreamSource(myRT);
 MVXRSDK.SetStreamSource(src);
-
-// 指定推流目标尺寸（SDK 内部 Graphics.Blit 自动缩放 + 格式转换）
-var srcWithSize = new RenderTextureStreamSource(myRT, targetWidth: 1280, targetHeight: 720);
-MVXRSDK.SetStreamSource(srcWithSize);
 
 // 生命周期事件（被切走时暂停自家采集省 GPU，切回自动恢复）
 src.OnAttached += () => myCapture.Resume();
 src.OnDetached += () => myCapture.Pause();
 ```
 
-性能：每帧 1 次 Graphics.Blit，PICO 4U 上约 0.2-0.5ms GPU。目标宽高必须是**偶数**（H.264 要求），可用 `CameraStreamCapture.ComputeStreamSize(srcW, srcH, maxLongSide)` 帮算。
+性能：每帧 1 次 `Graphics.Blit`（外部 RT → InternalRT），PICO 4U 上约 0.2-0.5ms GPU。注意：外部 RT 若非 16:9，Blit 到 InternalRT 时画面会拉伸——如需保持比例，业务自行裁边。
 
 #### 8.2.2 `CameraStreamSource`：让 Camera 直接渲染到 RT（零 Blit）
 
 ```csharp
-var src = new CameraStreamSource(myDirectorCamera, width: 1280, height: 720);
+var src = new CameraStreamSource(myDirectorCamera);
 MVXRSDK.SetStreamSource(src);
 ```
 
 | 项 | 行为 |
 |---|---|
-| Camera.targetTexture | Attach 时被 SDK 改为内部推流 RT；Detach 时还原 |
+| Camera.targetTexture | Attach 时被 SDK 改为 InternalRT；Detach 时还原 |
 | Camera.enabled | Attach 时被 SDK 强制 true；Detach 时还原（业务相机平时可 `enabled=false` 不烧 GPU） |
 | 是否上屏 | 推流 RT 渲染时不上屏（Unity 规则：有 targetTexture 的相机不进入屏幕画面） |
-| GPU 开销 | ≈ 0（无 Blit，相机渲染管线直接输出到 RT） |
+| GPU 开销 | ≈ 0（无 Blit，相机渲染管线直接输出到 InternalRT） |
+| 相机销毁自保护 | attach 中相机随场景销毁时自动清源推黑帧 + Warning（误用防护，正常路径仍是场景卸载前主动 `ClearStreamSource`） |
 
 适合"专门挂一台直播相机"的方案，配合 §8.4 切镜业务最自然。
 
@@ -385,84 +384,143 @@ MVXRSDK.SetStreamSource(myRT);   // RT 重载，SDK 内部包一层 RenderTextur
 
 ------
 
-### 8.3 推流装配组件 `MVXRStreamRig`（推荐入口）
+### 8.3 推流装配组件 `MVXRStreamRig`
 
-`MVXRStreamRig` 是把"画面源 + 游戏音 + 麦克风 + 切镜"一键拧好的 MonoBehaviour，Inspector 拖完字段即可推流，省掉手写 `SetStreamSource` / PCM 推送的胶水代码。
+v3 起 `MVXRStreamRig` **不承载画面推流**，仅负责两件事：
+- `OnEnable` 时应用 `streamConfigAsset`（写入 `StreamConfig.Active`）
+- 装配游戏音 / 麦克风采集（`GameAudioStreamCapture` / `MicrophoneStreamCapture`）
+
+画面源管理由业务直接调 SDK 公共 API（见 §8.4）。
 
 #### Inspector 字段
 
 | 字段 | 说明 |
 |---|---|
-| `mainCamera` | 业务主相机（玩家看到的画面）。SDK 不会修改它的 `targetTexture`，留空则不推画面 |
 | `gameAudioListener` | 游戏音 `AudioListener`，通过 `OnAudioFilterRead` 抓 master mix。留空则不推游戏音 |
-| `captureMicrophone` | 是否采集麦克风。注意会占用麦克风设备，可能与 Pico 语音 SDK 冲突 |
+| `captureMicrophone` | 是否采集麦克风。注意会占用麦克风设备，可能与 PICO 语音 SDK 冲突 |
 | `micSampleRate` | 麦克风采样率（48000 / 44100） |
 | `micDevice` | 麦克风设备名，留空使用系统默认 |
-| `directorCameras` | 预设切镜目标相机数组；配合 `SwitchCameraTemporary(index, durationSec)` 用 |
 | `streamConfigAsset` | 视频编码配置（`Fps` / `StreamMaxLongSide` / `VideoBandwidthKbps` / `VideoMinBitrateKbps` / `ForceH264`）。详见 [8.8.2 配置入口](#882-配置入口推荐-asset兼容代码)。留空全部走 SDK 默认 |
-
-#### 事件
-
-```csharp
-rig.Ready     += rt => Debug.Log("画面 RT 就绪 + 已交给 SDK");
-rig.OnSwitched += (cam, sec) => Debug.Log($"切镜成功 → {cam.name} 倒计时 {sec}s");
-rig.OnRestored += ()         => Debug.Log("切回主相机源");
-```
-
-#### 状态查询
-
-```csharp
-RenderTexture rt = rig.StreamTexture;        // 当前画面 RT（首帧渲染后非空）
-bool inSwitch    = rig.IsInDirectorSwitch;   // 是否处于切镜中
-```
 
 #### 与业务自管的差异
 
 | 场景 | 用 Rig | 不用 Rig |
 |---|---|---|
-| 推流画面 | 拖主相机进字段 | 自己构造 `RenderTextureStreamSource` + `SetStreamSource` |
+| 推流配置 | 拖 StreamConfigAsset 进字段，OnEnable 自动 Apply | 手调 `MVXRSDK.SetStreamConfig(cfg)` |
 | 游戏音 | 拖 AudioListener 进字段 | 自己挂脚本调 `PushGameAudioPcm` |
 | 麦克风 | 勾 `captureMicrophone` | 自己采集 PCM 调 `PushMicPcm` |
-| 切镜 | `rig.SwitchCameraTemporary(target, sec)` | 自己构造 `CameraStreamSource` + `SetStreamSource` + 倒计时切回 |
-| SDK Init 时机 | 任意（Rig 内部协程等 `MVXRSDK.IsReady`） | 业务自己保证 Init 后再 `SetStreamSource` |
-
-Rig 内部不调 `MVXRSDK.InitMVXRSDK` —— 业务自己控制 Init 时机与模式。
+| 推流画面 | 不涉及（v3 删除） | 调 `MVXRSDK.SendDirectorRequest(opts, camera)` 或手动 `SetStreamSource` |
 
 ------
 
-### 8.4 切镜（运行时切换画面源）
+### 8.4 切镜与导播（v3）
 
-#### 8.4.1 通过 Rig（推荐，业务编排都收口）
+#### 8.4.1 业务模型
 
-```csharp
-// 按预设相机切（推荐）
-rig.SwitchCameraTemporary(directorCameraIndex: 0, durationSec: 10);
+v3 切镜由中控仲裁：多个客户端各自调 `SendDirectorRequest` 请求成为推流机位，中控只选一台。被选中的信号是 `NotifyLive(start=true, url)`，SDK 对外表现为 `OnPushStreamStarting`——业务在此事件回调里接源，没被选中就不接（避免相机白渲染）。
 
-// 直接传 Camera 引用切
-rig.SwitchCameraTemporary(targetCamera, durationSec: 10);
-
-// 业务主动切回（不等倒计时）
-rig.RestoreOriginalCamera();
+```
+业务调 SendDirectorRequest(opts)
+    ──WS──→ 中控仲裁（只选一台）→ OnDirectorRequestResult(bool)  // 受理结果，受理 ≠ 被选中
+被选中: 中控 → NotifyLive(start, url) → SDK → OnPushStreamStarting(streamServerIp)
+    业务在此回调中 SetStreamSource(new CameraStreamSource(myCamera))
+被替换: 中控 → NotifyLive(stop) → SDK 停流 → OnPushStreamStopped
+    业务在此回调中 ClearStreamSource()
 ```
 
-行为：
-- 倒计时到期自动切回 `mainCamera`
-- 重复调用会**抢占**（取消上次倒计时，Detach 旧源，切到新相机）
-- 推流尚未启动（首帧未渲染）时拒绝并打 warning
-- 切镜中 Rig 被 Disable，倒计时清掉、待切镜的相机源放弃
-
-#### 8.4.2 底层（直接调 SDK）
-
-`MVXRStreamRig` 内部就是用下面这条路径，需要自己编排时直接调即可：
+#### 8.4.2 `DirectorRequestOptions` 与 `DirectorSource`
 
 ```csharp
-var directorSource = new CameraStreamSource(directorCam, width, height);
-MVXRSDK.SetStreamSource(directorSource);   // 旧 source.Detach + 新 source.Attach
-// ... 业务自己倒计时
-MVXRSDK.SetStreamSource(originalSource);   // 切回
+// 机位来源常量
+DirectorSource.Unity  // = "unity"：本机 Unity 游戏内机位（具体推哪个相机是本地决策，中控不感知）
+DirectorSource.Mr     // = "mr"：原直播（播控第一视角），空字符串等效
+
+// 切镜请求参数集
+var opts = new DirectorRequestOptions
+{
+    Source     = DirectorSource.Unity, // 机位来源；切回原直播时填 DirectorSource.Mr 或留空
+    Lenses     = 1,       // 镜头数：1=单镜头全屏 / 2=双拼 / 3=品字 / 4=2x2 四宫格
+    DurationSec = 10,     // 这步持续秒数（必须 > 0，到期由服务端停流）
+    Record     = false,   // 是否录制这一段
+};
 ```
 
-> **切镜源尺寸**必须 = 当前 SDK 内部推流 RT 的尺寸（即 `StreamConfig.StreamMaxLongSide` 同比例缩后的 W×H），否则 `TextureProviderSystem` 拒绝切源不断流。用 Rig 时这一点自动满足。
+`DurationSec <= 0` → 请求被拒；`Lenses < 1` → 按 1 处理并 Warning；空 Source → 原直播（合法值，SDK 原样透传）。
+
+#### 8.4.3 推荐用法：自动接源重载（一行请求 + 自动管理）
+
+```csharp
+// 请求 + 被选中后自动接 camera 作为画面源；停流时 SDK 自动清源
+MVXRSDK.SendDirectorRequest(opts, myDirectorCamera);
+```
+
+- `opts.Source` 留空时自动填 `DirectorSource.Unity`（传了相机即明确本机机位）
+- 被选中（`NotifyLive start`）且业务未手动接源时，SDK 自动 `new CameraStreamSource(camera)` 接上
+- 由 SDK 自动接的源在停流时自动清除（业务手动接的仍由业务自清）
+- **pending 生命周期**：新请求覆盖旧 pending；被拒（`OnDirectorRequestResult(false)`）清除；会话启动消费；相机销毁自动放弃（Warning）
+
+切回原直播（播控第一视角）：
+
+```csharp
+MVXRSDK.SendDirectorRequest(new DirectorRequestOptions
+{
+    Source = DirectorSource.Mr,   // 或留空
+    Lenses = 1, DurationSec = 30,
+});
+// 不传 camera，播控侧自理
+```
+
+#### 8.4.4 手动接源（需要精细控制时）
+
+```csharp
+// 订阅被选中事件，手动接源
+MVXRSDK.OnPushStreamStarting += streamServerIp =>
+{
+    MVXRSDK.SetStreamSource(new CameraStreamSource(myDirectorCamera));
+};
+
+// 停流时手动清源
+MVXRSDK.OnPushStreamStopped += reason =>
+{
+    MVXRSDK.ClearStreamSource();
+};
+
+// 发起请求（纯请求重载，不自动管理源）
+MVXRSDK.SendDirectorRequest(opts);
+```
+
+手动接源优先于自动接源：自动接源重载发现 `OnPushStreamStarting` 回调中业务已手动接了源，自动跳过（Info 日志，预期行为）。
+
+#### 8.4.5 一相机推流保护
+
+同一时刻最多一个相机在推流。`SetStreamSource` 按会话状态处理：
+
+| 当前状态 | SetStreamSource 行为 |
+|---------|---------------------|
+| 推流会话活跃 + 已有画面源 | **丢弃**，Warning 日志（不排队、不抢占） |
+| 推流会话活跃 + 无源（黑帧等待接源） | 正常接上——`OnPushStreamStarting` 后的标准接源路径 |
+| 会话空闲（Idle） | 正常替换——没有观众在看，预接源/换源自由 |
+
+`ClearStreamSource` 不受此限制——业务显式清源是明确意图（清后会话若仍活跃则推黑帧）。
+
+#### 8.4.6 多场景使用约定
+
+推流会话是 SDK 层（`DontDestroyOnLoad`）的，可横跨切场景活着（时长由服务端的 `DurationSec` 控制）；相机是场景对象、随场景销毁。
+
+- **场景卸载前主动 `ClearStreamSource()`**——不清则相机销毁后源悬挂（SDK `CameraStreamSource` 有销毁自保护兜底，但那是误用防护不是正常路径）
+- 新场景推流会话若仍活跃（`MVXRSDK.CurrentStreamUrl` 非空），业务自行决定是否接新场景相机：观众视角为旧场景画面 → 黑帧 → 新场景画面，推流会话不断
+
+```csharp
+// 场景卸载前
+MVXRSDK.ClearStreamSource();
+
+// 新场景 Start / OnEnable 中
+if (!string.IsNullOrEmpty(MVXRSDK.CurrentStreamUrl))
+{
+    // 推流会话仍活跃，决定是否立即接源
+    MVXRSDK.SetStreamSource(new CameraStreamSource(newSceneCamera));
+}
+```
 
 ------
 
@@ -487,7 +545,7 @@ MVXRSDK.PushMicPcm(micPcm, sampleRate: 48000, channels: 1);
 - 通道数：mono / stereo（stereo 内部自动平均成 mono）
 - `pcm == null` / 越界采样率 / 越界通道 → `ArgumentException`
 
-> 用 `MVXRStreamRig` 时不需要自己调这两个 API——拖 AudioListener 和勾 `captureMicrophone` 后，Rig 内部的 `GameAudioStreamCapture` / `MicrophoneStreamCapture` 会自动调它们。
+> 用 `MVXRStreamRig` 时不需要自己调这两个 PCM API——拖 `AudioListener` 进 `gameAudioListener` 字段、勾 `captureMicrophone` 后，Rig 内部的 `GameAudioStreamCapture` / `MicrophoneStreamCapture` 组件自动完成采集与推送。
 
 ------
 
@@ -579,7 +637,7 @@ MVXRSDK.Debug_SimulateNotifyLive("192.168.1.100", start: true);
 
 **RT 尺寸下限来源**：native 抛 `Texture size is invalid. minWidth:145, maxWidth:4096 minHeight:49, maxHeight:4096`。
 
-**RT 尺寸预检踩坑**：Editor Game View 窗口拖到 145×49 以下、PICO XR 初始化异常 fallback 到非 XR 路径都会让源 RT 缩到非法尺寸。`MVXRStreamRig` 用 `StreamConfig.StreamMaxLongSide`（默认 1280）等比缩放后，理论下界 ≈ XR 渲染目标短边 / 长边 × 1280；业务自管 RT 时自己保证 ≥ 145×49。
+**RT 尺寸预检踩坑**：v3 起 SDK 内部 `InternalRT` 为固定尺寸（`StreamConfig.StreamMaxLongSide` 按 16:9，默认 1280×720），不再由画面源决定 RT 尺寸。业务传入 `RenderTextureStreamSource` 时，外部 RT 大小不影响 InternalRT——SDK 内部 Blit 自动缩放适配。
 
 ##### C. 项目实测约束
 
@@ -695,10 +753,64 @@ MVXRSDK.SetStreamConfig(new StreamConfig {
 
 #### 8.8.6 运行时修改的注意事项
 
-- **协商期字段**（`Fps` / `StreamMaxLongSide` / `VideoBandwidthKbps` / `VideoMinBitrateKbps` / `ForceH264` / `IceGatheringTimeoutSec`）只在 `WebRTCSystem.Start → NegotiateOffer` 或 Rig Attach 期间读取一次，**推流进行中改不会重建 RT / 触发重协商**——必须 Stop → Start。
+- **协商期字段**（`Fps` / `StreamMaxLongSide` / `VideoBandwidthKbps` / `VideoMinBitrateKbps` / `ForceH264` / `IceGatheringTimeoutSec`）只在 `WebRTCSystem.Start → NegotiateOffer` 期间读取一次，**推流进行中改不会重建 RT / 触发重协商**——必须 Stop → Start。
 - **每次推流读取**字段（`WhipHttpTimeoutSec` / 各 `*RetryDelaysMs` / `DisconnectedSelfHealSec` / `StatsReportIntervalMs`）下一次相应触发即生效。
 - `SetStreamConfig(null)` 等价于恢复全部默认值（`new StreamConfig()`）。
 - 完整字段定义见 [`StreamConfig.cs`](../Runtime/Scripts/Operation/Stream/StreamConfig.cs)。
+
+------
+
+### 8.9 v3 破坏性变更（切镜化推流重构）
+
+从 v2.x 升级到 v3 推流子系统的迁移说明：
+
+#### 删除的 API
+
+| 删除项 | 替代方案 |
+|--------|---------|
+| `SendDirectorRequest(int lenses, int durationSec)` | `SendDirectorRequest(DirectorRequestOptions opts)` 或 `SendDirectorRequest(DirectorRequestOptions opts, Camera camera)` |
+| `CameraStreamCapture`（主相机/第一视角推流捕获） | 第一视角推流由播控承担，Unity 侧不推主相机 |
+| `MVXRStreamRig.mainCamera` | 画面源由业务直接管理（见 §8.4） |
+| `MVXRStreamRig.directorCameras` | 业务自己持有目标相机引用 |
+| `MVXRStreamRig.SwitchCameraTemporary(...)` | `SendDirectorRequest(opts, camera)` 自动接源重载，或手动订阅 `OnPushStreamStarting` |
+| `MVXRStreamRig.RestoreOriginalCamera()` | 停流由中控通过 `NotifyLive(stop)` 触发，业务订阅 `OnPushStreamStopped` 清源 |
+| `MVXRStreamRig.Ready`（事件） | 订阅 `MVXRSDK.OnPushStreamStarting` |
+| `MVXRStreamRig.OnSwitched`（事件） | 业务自行记录接源时机 |
+| `MVXRStreamRig.OnRestored`（事件） | 订阅 `MVXRSDK.OnPushStreamStopped` |
+| `MVXRStreamRig.StreamTexture`（属性） | `MVXRSDK.CurrentStreamUrl` 判会话活跃 |
+| `MVXRStreamRig.IsInDirectorSwitch`（属性） | 业务自行维护状态标志 |
+
+#### 构造函数签名变化
+
+```csharp
+// 旧（v2）
+new CameraStreamSource(Camera camera, int width, int height)
+new RenderTextureStreamSource(RenderTexture rt, int targetWidth, int targetHeight)
+
+// 新（v3）——宽高由 InternalRT 固定尺寸决定，构造不传宽高
+new CameraStreamSource(Camera camera)
+new RenderTextureStreamSource(RenderTexture rt)
+```
+
+#### 典型迁移示例
+
+```csharp
+// v2 写法（Rig 画面链路）
+rig.SwitchCameraTemporary(directorCamera, durationSec: 10);
+
+// v3 推荐写法（自动接源重载）
+MVXRSDK.SendDirectorRequest(
+    new DirectorRequestOptions { Source = DirectorSource.Unity, Lenses = 1, DurationSec = 10 },
+    directorCamera);
+
+// v3 手动写法（精细控制）
+MVXRSDK.OnPushStreamStarting += _ =>
+    MVXRSDK.SetStreamSource(new CameraStreamSource(directorCamera));
+MVXRSDK.OnPushStreamStopped += _ =>
+    MVXRSDK.ClearStreamSource();
+MVXRSDK.SendDirectorRequest(
+    new DirectorRequestOptions { Source = DirectorSource.Unity, Lenses = 1, DurationSec = 10 });
+```
 
 ------
 
