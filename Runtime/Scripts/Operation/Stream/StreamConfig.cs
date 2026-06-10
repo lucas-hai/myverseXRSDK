@@ -13,8 +13,8 @@ namespace MyVerseXRSDK
         // === 视频参数 ===
 
         /// <summary>
-        /// 推流目标帧率上限。CameraStreamCapture（cmd.CopyTexture）和 RenderTextureStreamSource
-        /// （Graphics.Blit）都按此 fps 节流，避免编码器被设备 72/90Hz 主循环喂爆。
+        /// 推流目标帧率上限。RenderTextureStreamSource（Graphics.Blit）按此 fps 节流，
+        /// 避免编码器被设备 72/90Hz 主循环喂爆；同时落到编码器 maxFramerate。
         /// 改动下一帧立即生效。
         /// </summary>
         public int Fps = 30;
