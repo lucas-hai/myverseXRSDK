@@ -33,6 +33,7 @@ namespace MyVerseXRSDK
         RoomNotAllocated = 3004,
 
         // === 4xxx 推流（覆盖旧 StreamErrorCode）===
+        // PushStreamModule 不再触发（无源启动推黑帧）；WebRTCSystem 对 null RT 的预检仍使用。
         NoStreamSource = 4001,
         InvalidStreamUrl = 4002,
         /// <summary>RT 尺寸低于 com.unity.webrtc 编码器最小（minWidth=145/minHeight=49），

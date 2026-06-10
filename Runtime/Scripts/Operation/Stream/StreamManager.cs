@@ -50,7 +50,6 @@ namespace MyVerseXRSDK
             TextureProviderSystem.Init();
 
             m_PushModule = new PushStreamModule();
-            m_PushModule.SetHasSourcePredicate(() => TextureProviderSystem.HasSource);
             m_PushModule.SetDependencies(
                 getSource: () => TextureProviderSystem.InternalRT,
                 sessionFactory: () => new WebRTCSystem(),

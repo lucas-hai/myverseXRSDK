@@ -28,7 +28,6 @@ namespace MyVerseXRSDK
             State = next;
         }
 
-        private Func<bool> m_HasSource = () => false;
         private Func<RenderTexture> m_GetSource = () => null;
         private Func<IWebRTCSession> m_SessionFactory = () => null;
         private Func<WhipClient> m_WhipFactory = () => null;
@@ -42,11 +41,6 @@ namespace MyVerseXRSDK
         internal event Action<StreamStopReason> OnStopped;
         internal event Action<MVXRSDKErrorCode, string> OnFailed;
         internal event Action<StreamStats> OnStats;
-
-        internal void SetHasSourcePredicate(Func<bool> predicate)
-        {
-            m_HasSource = predicate ?? (() => false);
-        }
 
         internal void SetDependencies(
             Func<RenderTexture> getSource,
@@ -63,13 +57,6 @@ namespace MyVerseXRSDK
             if (State != PushStreamState.Idle)
             {
                 MVXRSDKLog.Warning($"PushStreamModule: 当前非 Idle 状态({State})，幂等忽略 Start url={whipUrl}");
-                return;
-            }
-
-            if (!m_HasSource())
-            {
-                MVXRSDKLog.Error($"PushStreamModule: 无画面源，拒绝启动推流 url={whipUrl}");
-                OnFailed?.Invoke(MVXRSDKErrorCode.NoStreamSource, "no stream source");
                 return;
             }
 
