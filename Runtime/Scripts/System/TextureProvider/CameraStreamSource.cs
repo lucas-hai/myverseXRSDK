@@ -25,18 +25,21 @@ namespace MyVerseXRSDK
         private bool m_OriginalEnabled;
         private bool m_Attached;
 
-        public int Width { get; }
-        public int Height { get; }
+        /// <summary>宽高 = attach 后的推流 RT 尺寸（仅信息展示）；未 attach 时为 0。</summary>
+        public int Width => m_AttachedTarget != null ? m_AttachedTarget.width : 0;
+        public int Height => m_AttachedTarget != null ? m_AttachedTarget.height : 0;
         public string DisplayName => m_Camera != null ? $"Camera({m_Camera.name})" : "Camera(disposed)";
 
         public event Action OnAttached;
         public event Action OnDetached;
 
-        public CameraStreamSource(Camera camera, int width, int height)
+        /// <summary>
+        /// v3：不再传宽高——InternalRT 固定尺寸（StreamConfig.StreamMaxLongSide 按 16:9），
+        /// 相机 attach 后按 RT 尺寸渲染，比例永远正确。
+        /// </summary>
+        public CameraStreamSource(Camera camera)
         {
             m_Camera = camera;
-            Width = width;
-            Height = height;
         }
 
         public void Attach(RenderTexture targetRT)

@@ -54,8 +54,7 @@ namespace MyVerseXRSDK
 
         /// <summary>
         /// 中控仲裁结果透传（含本机和其它客户端）。SDK 仅做 pb→基本类型翻译，不做编排。
-        /// 业务侧（典型挂 MVXRStreamRig 旁的脚本）订阅本事件，判 deviceId==<see cref="DeviceId"/>
-        /// 决定是否调 rig.SwitchCameraTemporary 等切镜行为。
+        /// v3：被选中信号改由 OnPushStreamStarting 承载（NotifyLive start 触发），本事件仅做协议日志。
         /// 参数：deviceId、isPrimary（是否主位）、slot（槽位下标）、durationSec（持续秒数）。
         /// </summary>
         public static event Action<string, bool, int, int> OnDirectorSelected;

@@ -17,39 +17,26 @@ namespace MyVerseXRSDK
         private RenderTexture m_External;
         private RenderTexture m_Target;
         private bool m_Attached;
-        // 推流目标尺寸（InternalRT 实际尺寸）；与 m_External 尺寸可不同，由 Graphics.Blit 缩放
-        private readonly int m_Width;
-        private readonly int m_Height;
         // 帧率节流时间戳；运行时每帧从 StreamConfig.Active.Fps 读上限，业务改 fps 立即生效
         private double m_NextBlitTimeUnscaled;
 
-        public int Width => m_Width;
-        public int Height => m_Height;
+        /// <summary>宽高 = 外部 RT 原始尺寸（仅信息展示）；推流尺寸由 InternalRT 固定决定，Blit 自动缩放。</summary>
+        public int Width => m_External != null ? m_External.width : 0;
+        public int Height => m_External != null ? m_External.height : 0;
         public string DisplayName => m_External != null
-            ? (m_External.width == m_Width && m_External.height == m_Height
-                ? $"RT({m_External.width}x{m_External.height})"
-                : $"RT(src {m_External.width}x{m_External.height} → stream {m_Width}x{m_Height})")
+            ? $"RT({m_External.width}x{m_External.height})"
             : "RT(disposed)";
 
         public event Action OnAttached;
         public event Action OnDetached;
 
-        /// <summary>用外部 RT 原始尺寸作为推流尺寸（不缩放）。</summary>
-        public RenderTextureStreamSource(RenderTexture externalRT)
-            : this(externalRT, externalRT != null ? externalRT.width : 0, externalRT != null ? externalRT.height : 0)
-        {
-        }
-
         /// <summary>
-        /// 用指定的推流目标尺寸构造，BlitTick 时 Graphics.Blit 自动做尺寸/格式缩放。
-        /// targetWidth/Height 必须是偶数（H.264 要求）；调用方可用
-        /// <see cref="MyVerseXRSDK.Streaming.CameraStreamCapture.ComputeStreamSize"/> 计算。
+        /// v3：不再传目标尺寸——InternalRT 固定尺寸，BlitTick 的 Graphics.Blit 自动做
+        /// 尺寸/格式转换（非 16:9 外部 RT 会拉伸）。
         /// </summary>
-        public RenderTextureStreamSource(RenderTexture externalRT, int targetWidth, int targetHeight)
+        public RenderTextureStreamSource(RenderTexture externalRT)
         {
             m_External = externalRT;
-            m_Width = targetWidth > 0 ? targetWidth : (externalRT != null ? externalRT.width : 0);
-            m_Height = targetHeight > 0 ? targetHeight : (externalRT != null ? externalRT.height : 0);
         }
 
         public void Attach(RenderTexture targetRT)

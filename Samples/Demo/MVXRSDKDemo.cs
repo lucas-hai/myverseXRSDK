@@ -11,8 +11,8 @@ using UnityEngine;
 /// 2. SDK 启动：Production（走真实中控）/ WsDirect（跳过 localhost 中控，外部传中控服地址）
 /// 3. 状态机查询：MVXRSDK.State / IsReady / IsConnected —— Update 周期打印
 /// 4. 积分扣除：自助模式 TransactionVerification 主动调，订阅模式监听 OnTransactionVerification
-/// 5. 推流（MVXRStreamRig 装配）：画面源 / 游戏音 / 麦克风 / 切镜，全部由 Rig 一键拧好
-/// 6. 切镜：真链路（SendDirectorRequest → 中控仲裁 → OnDirectorSelected → Rig 真切）+ 本地直切（Rig.SwitchCameraTemporary）
+/// 5. 推流（MVXRStreamRig 装配音频+配置）；
+/// 6. 切镜：SendDirectorRequest(opts, camera) 自动接源
 /// 7. 录屏：StartRecord 透传给中控；结果走 OnRecordResult；SDK 不做实际录制，server 到期自动停
 /// 8. 全局错误监听：OnError 一个订阅接全部失败路径（推流/录屏/Socket/HTTP/积分）
 /// 9. 反初始化：UnInitMVXRSDK 释放全部资源，可二次 Init
@@ -76,11 +76,11 @@ public sealed class MVXRSDKDemo : MonoBehaviour
     [Tooltip("RealCamera=true 时使用的 CameraId。")]
     public string recordCameraId = "";
 
-    [Header("切镜（按 D 走中控真链路 / L 本地直切）")]
-    [Tooltip("Rig.directorCameras 数组下标。目标相机请直接拖进 MVXRStreamRig.directorCameras 数组。")]
-    public int directorCameraIndex = 0;
+    [Header("切镜（按 D 走中控真链路）")]
+    [Tooltip("被选中后要推的相机。URP Render Type=Base；enabled 默认 false。")]
+    public Camera directorCamera;
 
-    [Tooltip("切镜持续秒数。本地直切（L）由 Rig 倒计时；真链路（D）由中控决定 durationSec 透传回来。")]
+    [Tooltip("切镜持续秒数（透传给中控）。")]
     public int directorDurationSec = 5;
 
     [Tooltip("镜头数（透传给中控）：1=单镜头 / 2=双拼 / 3=品字 / 4=2x2。仅真链路（D）用得到。")]
@@ -102,7 +102,6 @@ public sealed class MVXRSDKDemo : MonoBehaviour
     public KeyCode transactionKey = KeyCode.T;
     public KeyCode recordKey = KeyCode.R;
     public KeyCode directorRealKey = KeyCode.D;
-    public KeyCode directorLocalKey = KeyCode.L;
     public KeyCode simulateLiveStartKey = KeyCode.K;
     public KeyCode simulateLiveStopKey = KeyCode.S;
     public KeyCode hotSwapXROffsetKey = KeyCode.X;
@@ -150,13 +149,7 @@ public sealed class MVXRSDKDemo : MonoBehaviour
         MVXRSDK.OnDirectorSelected        += OnDirectorSelected;
         MVXRSDK.OnError                   += OnError;
 
-        // 订阅 Rig 业务事件（切镜成功 / 切回 / 画面源就绪）
-        if (streamRig != null)
-        {
-            streamRig.Ready      += OnRigReady;
-            streamRig.OnSwitched += OnRigSwitched;
-            streamRig.OnRestored += OnRigRestored;
-        }
+        // v3：Rig 不再暴露画面事件（OnSwitched/OnRestored/Ready 已移除）
 
         if (initOnStart) DoInit();
     }
@@ -173,12 +166,7 @@ public sealed class MVXRSDKDemo : MonoBehaviour
         MVXRSDK.OnDirectorSelected        -= OnDirectorSelected;
         MVXRSDK.OnError                   -= OnError;
 
-        if (streamRig != null)
-        {
-            streamRig.Ready      -= OnRigReady;
-            streamRig.OnSwitched -= OnRigSwitched;
-            streamRig.OnRestored -= OnRigRestored;
-        }
+        // v3：Rig 不再暴露画面事件，无需反订阅
     }
 
     private void Update()
@@ -189,7 +177,6 @@ public sealed class MVXRSDKDemo : MonoBehaviour
         if (Input.GetKeyDown(transactionKey))        DoTransactionVerification();
         if (Input.GetKeyDown(recordKey))             DoRecord();
         if (Input.GetKeyDown(directorRealKey))       DoDirectorReal();
-        if (Input.GetKeyDown(directorLocalKey))      DoDirectorLocal();
         if (Input.GetKeyDown(simulateLiveStartKey))  DoSimulateLive(true);
         if (Input.GetKeyDown(simulateLiveStopKey))   DoSimulateLive(false);
         if (Input.GetKeyDown(hotSwapXROffsetKey))    DoHotSwapXROffset();
@@ -326,56 +313,23 @@ public sealed class MVXRSDKDemo : MonoBehaviour
 
     // ============================== 切镜（真链路 & 本地直切） ==============================
 
-    [ContextMenu("Switch Camera (真链路：发给中控仲裁)")]
+    [ContextMenu("Switch Camera (真链路：发给中控仲裁，自动接源)")]
     public void DoDirectorReal()
     {
-        // 真链路：发请求 → 中控仲裁 → server 推回 OnDirectorSelected → 本组件订阅事件
-        // → 判 deviceId == MVXRSDK.DeviceId 后调 rig.SwitchCameraTemporary 真切
-        // SDK 不做业务编排，编排在 Rig + 本组件这里
+        // 自动接源重载：被选中（NotifyLive start）后 SDK 自动把 directorCamera 接为画面源，
+        // 停流自动清；受理结果走 OnDirectorRequestResult
         MVXRSDK.SendDirectorRequest(new DirectorRequestOptions
         {
-            Source      = DirectorSource.Unity,
             Lenses      = directorLenses,
             DurationSec = directorDurationSec,
-        });
-        Debug.Log($"[MVXRSDKDemo] SendDirectorRequest lenses={directorLenses} duration={directorDurationSec}s —— 等中控回包");
-    }
-
-    [ContextMenu("Switch Camera (本地直切，跳过中控)")]
-    public void DoDirectorLocal()
-    {
-        if (streamRig == null)
-        {
-            Debug.LogError("[MVXRSDKDemo] streamRig 未配置，无法本地直切");
-            return;
-        }
-        // 本地直切：跳过 WS 仲裁，直接操作 Rig；用于调试 Rig 切镜行为
-        streamRig.SwitchCameraTemporary(directorCameraIndex, directorDurationSec);
+        }, directorCamera);
+        Debug.Log($"[MVXRSDKDemo] SendDirectorRequest(auto) camera={directorCamera?.name} lenses={directorLenses} duration={directorDurationSec}s");
     }
 
     private void OnDirectorSelected(string deviceId, bool isPrimary, int slot, int durationSec)
     {
-        bool isSelf = string.Equals(deviceId, MVXRSDK.DeviceId, StringComparison.Ordinal);
-        Debug.Log($"[MVXRSDKDemo] OnDirectorSelected deviceId={deviceId} self={isSelf} isPrimary={isPrimary} slot={slot} duration={durationSec}s");
-        if (!isSelf) return;     // 中控回包是所有客户端广播，只对本机生效
-        if (streamRig == null) return;
-        // 业务规则示例：本机被选中 → 调 Rig 切镜；durationSec 由中控决定
-        streamRig.SwitchCameraTemporary(directorCameraIndex, durationSec);
-    }
-
-    private void OnRigSwitched(Camera target, int durationSec)
-    {
-        Debug.Log($"[MVXRSDKDemo] Rig 切镜 → target={target.name} duration={durationSec}s");
-    }
-
-    private void OnRigRestored()
-    {
-        Debug.Log("[MVXRSDKDemo] Rig 已切回主相机源");
-    }
-
-    private void OnRigReady(RenderTexture rt)
-    {
-        Debug.Log($"[MVXRSDKDemo] Rig.Ready 推流 RT 就绪 size={rt.width}x{rt.height} format={rt.format}");
+        // v3：被选中信号 = NotifyLive（OnPushStreamStarting），本事件仅透传日志
+        Debug.Log($"[MVXRSDKDemo] OnDirectorSelected deviceId={deviceId} isPrimary={isPrimary} slot={slot} duration={durationSec}s");
     }
 
     // ============================== 推流状态事件 ==============================
