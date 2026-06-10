@@ -98,6 +98,14 @@ namespace MyVerseXRSDK
                 return true;
             }
 
+            if (ReferenceEquals(newSource, s_Current))
+            {
+                // 业务把当前已 attach 的同一实例再传一次：直接视为成功。
+                // 若不拦截，会话活跃时会走丢弃分支把正在使用的源 Dispose 掉（二次 Dispose 隐患）
+                MVXRSDKLog.Info($"TextureProviderSystem.SwitchSource: 新源即当前源 {newSource.DisplayName}，无操作");
+                return true;
+            }
+
             if (s_SessionActive() && s_Current != null)
             {
                 MVXRSDKLog.Warning(
@@ -154,10 +162,11 @@ namespace MyVerseXRSDK
             ClearSource();
         }
 
-        /// <summary>固定推流尺寸：长边取 maxLongSide（≤0 时 1280），16:9，偶数对齐（H.264 要求）。</summary>
+        /// <summary>固定推流尺寸：长边取 maxLongSide（≤0 时 1280，下限 16 防止 16:9 取整出 0 高），16:9，偶数对齐（H.264 要求）。</summary>
         internal static (int width, int height) ComputeFixedSize(int maxLongSide)
         {
             int longSide = maxLongSide > 0 ? maxLongSide : 1280;
+            longSide = Math.Max(longSide, 16);   // 过小长边会让 16:9 高度取整为 0，RenderTexture.Create 失败且日志难定位
             int w = longSide & ~1;
             int h = (int)Math.Round(longSide * 9.0 / 16.0) & ~1;
             return (w, h);

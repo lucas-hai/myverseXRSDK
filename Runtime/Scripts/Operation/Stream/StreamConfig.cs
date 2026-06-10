@@ -23,7 +23,7 @@ namespace MyVerseXRSDK
         /// 推流 InternalRT 长边像素（固定 16:9，偶数对齐；默认 1280 → 1280x720）。
         /// v3 起 InternalRT 尺寸由本字段决定、与画面源无关：CameraStreamSource 相机按 RT
         /// 尺寸渲染（比例永远正确）；RenderTextureStreamSource Blit 缩放适配（非 16:9 外部
-        /// RT 会拉伸）。≤0 时按 1280 处理。RT 创建后修改不重建，需 UnInit → Init。
+        /// RT 会拉伸）。≤0 时按 1280 处理。有效下限 16。RT 创建后修改不重建，需 UnInit → Init。
         /// </summary>
         public int StreamMaxLongSide = 1280;
 
