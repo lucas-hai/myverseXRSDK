@@ -109,15 +109,26 @@ namespace MyVerseXRSDK
         // ============================== 导播切镜头 ==============================
 
         /// <summary>
-        /// 业务侧请求中控仲裁切镜：发 DirectorInsert.Request 给中控。SDK 不做任何编排：
-        /// 是否真的切相机、切到哪个相机、倒计时切回等业务规则全部在业务层（典型在 MVXRStreamRig 旁）。
-        /// 是否被中控选中通过 <see cref="OnDirectorSelected"/> 事件透传。
+        /// 请求中控仲裁切镜（纯请求）：发 DirectorInsert.Request。受理结果走
+        /// <see cref="OnDirectorRequestResult"/>；是否被选中以 NotifyLive 为准——被选中时
+        /// SDK 触发 <see cref="OnPushStreamStarting"/>，业务在该回调中 SetStreamSource 接源。
+        /// 请求切回原直播：opts.Source = <see cref="DirectorSource.Mr"/>（或留空）。
         /// </summary>
-        /// <param name="lenses">镜头数（透传给中控）: 1=单镜头全屏 / 2=双拼 / 3=品字 / 4=2x2</param>
-        /// <param name="durationSec">这步持续秒数（透传给中控）</param>
-        public static void SendDirectorRequest(int lenses, int durationSec)
+        public static void SendDirectorRequest(DirectorRequestOptions opts)
         {
-            StreamManager.SendDirectorRequest(lenses, durationSec);
+            StreamManager.SendDirectorRequest(opts, null);
+        }
+
+        /// <summary>
+        /// 请求中控仲裁切镜 + 被选中后自动接源（推荐）：opts.Source 留空自动填
+        /// <see cref="DirectorSource.Unity"/>。被选中（NotifyLive start）时若业务未手动接源，
+        /// SDK 自动把 <paramref name="camera"/> 包成 CameraStreamSource 接上；停流时自动清除。
+        /// 业务在 <see cref="OnPushStreamStarting"/> 中手动接源优先于自动接源。
+        /// pending 生命周期：新请求覆盖旧值；请求被拒清除；会话启动消费；相机销毁自动放弃。
+        /// </summary>
+        public static void SendDirectorRequest(DirectorRequestOptions opts, Camera camera)
+        {
+            StreamManager.SendDirectorRequest(opts, camera);
         }
 
         // ============================== Debug 入口 ==============================

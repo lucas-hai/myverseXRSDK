@@ -30,6 +30,10 @@ namespace MyVerseXRSDK
         // capture 启动时的 gen，yield 完成后比对，不一致直接 yield break。避免 CancelStreamRetry
         // 在 coroutine 已通过检查、即将调 Start 的窗口里失效（field 已 null 但 Start 仍会执行）
         private static int s_StreamRetryGen;
+        // 自动接源 pending：camera 重载缓存的相机；会话启动时消费（见 TryAutoAttachPendingCamera, Task 8 接线）
+        private static UnityEngine.Camera s_PendingAutoCamera;
+        // 当前画面源是否由 SDK 自动接上（谁接的谁清：停流时 SDK 自动清；手动接的业务自清）
+        private static bool s_AutoAttachedActive;
 
         // === 生命周期 ===
 
@@ -124,6 +128,8 @@ namespace MyVerseXRSDK
             s_LastStreamUrl = null;
             s_RetryAttempts = 0;
             s_LatestStats = null;
+            s_PendingAutoCamera = null;
+            s_AutoAttachedActive = false;
         }
 
         // === 对 MVXRSDK Facade 暴露的方法 ===
@@ -199,29 +205,99 @@ namespace MyVerseXRSDK
         }
 
         /// <summary>
-        /// 业务侧请求中控仲裁切镜：把请求发给 WebSocket，是否真切由 server 推 DirectorSelectedPush 决定。
-        /// SDK 仅做 pb 发送；上层（业务/MVXRStreamRig）订阅 MVXRSDK.OnDirectorSelected 自行决定如何响应。
+        /// 业务侧请求中控仲裁切镜：发 DirectorInsert.Request。被选中的信号是后续的
+        /// NotifyLive(start)（对外表现为 OnPushStreamStarting），本应答仅表示"请求被受理"。
+        /// autoAttachCamera 非 null 时：opts.Source 留空自动填 "unity"；被选中后 SDK 自动接源。
         /// </summary>
-        internal static void SendDirectorRequest(int lenses, int durationSec)
+        internal static void SendDirectorRequest(DirectorRequestOptions opts, UnityEngine.Camera autoAttachCamera)
         {
+            string source = opts.Source ?? string.Empty;
+            if (autoAttachCamera != null)
+            {
+                // 传了相机即明确"unity 机位"；显式填了别的值是矛盾请求
+                if (string.IsNullOrEmpty(source))
+                {
+                    source = DirectorSource.Unity;
+                }
+                else if (source != DirectorSource.Unity)
+                {
+                    MVXRSDKLog.Error($"StreamManager.SendDirectorRequest: 自动接源重载下 Source=\"{source}\" 与传入相机矛盾（仅允许空或 unity），拒绝");
+                    MVXRSDK.RaiseDirectorRequestResult(false);
+                    return;
+                }
+            }
+            if (opts.DurationSec <= 0)
+            {
+                MVXRSDKLog.Error($"StreamManager.SendDirectorRequest: durationSec={opts.DurationSec} 必须 > 0");
+                MVXRSDK.RaiseDirectorRequestResult(false);
+                return;
+            }
+            int lenses = opts.Lenses;
+            if (lenses < 1)
+            {
+                MVXRSDKLog.Warning($"StreamManager.SendDirectorRequest: lenses={lenses} 非法，按 1 处理");
+                lenses = 1;
+            }
             if (!m_Initialized)
             {
                 MVXRSDKLog.Warning("StreamManager: SDK 未初始化，拒绝 SendDirectorRequest");
-                return;
-            }
-            if (durationSec <= 0)
-            {
-                MVXRSDKLog.Error($"StreamManager.SendDirectorRequest: durationSec={durationSec} 必须 > 0");
+                MVXRSDK.RaiseDirectorRequestResult(false);
                 return;
             }
             if (!SocketSystem.IsConnect)
             {
                 MVXRSDKLog.Warning("StreamManager.SendDirectorRequest: WebSocket 未连接，请求被丢弃");
+                MVXRSDK.RaiseDirectorRequestResult(false);
                 return;
             }
-            var req = new global::DirectorInsert.Types.Request { Lenses = lenses, DurationSec = durationSec };
-            SocketSystem.SendMessage(MessageType.CS_DIRECTOR_INSERT, req.ToByteString());
-            MVXRSDKLog.Info($"StreamManager: 发 DirectorInsert lenses={lenses} duration={durationSec}");
+
+            // 新请求覆盖旧 pending（含 null：纯请求重载会清掉上一次的自动接源意图）
+            s_PendingAutoCamera = autoAttachCamera;
+
+            var req = BuildDirectorInsertRequest(source, lenses, opts.DurationSec, opts.Record);
+            SocketSystem.SendMessage(MessageType.CS_DIRECTOR_INSERT, req.ToByteString(),
+                (code, buf) => HandleDirectorInsertResponse(code, buf));
+            MVXRSDKLog.Info($"StreamManager: 发 DirectorInsert source={source} lenses={lenses} duration={opts.DurationSec} record={opts.Record} autoAttach={(autoAttachCamera != null ? autoAttachCamera.name : "无")}");
+        }
+
+        /// <summary>构造 pb 请求（纯函数，单测入口）。</summary>
+        internal static global::DirectorInsert.Types.Request BuildDirectorInsertRequest(
+            string source, int lenses, int durationSec, bool record)
+        {
+            return new global::DirectorInsert.Types.Request
+            {
+                Source = source ?? string.Empty,
+                Lenses = lenses,
+                DurationSec = durationSec,
+                Record = record
+            };
+        }
+
+        /// <summary>DirectorInsert 应答处理（internal 供单测直接喂字节）。被拒时清 pending 相机。</summary>
+        internal static void HandleDirectorInsertResponse(int code, byte[] buffer)
+        {
+            if (code != 0)
+            {
+                MVXRSDKLog.Warning($"StreamManager: DirectorInsert 应答失败 code={code}");
+                s_PendingAutoCamera = null;
+                MVXRSDK.RaiseDirectorRequestResult(false);
+                return;
+            }
+            if (!SocketSystem.TryParse<global::DirectorInsert.Types.Response>(buffer, out var resp, "Stream.DirectorInsertResp"))
+            {
+                s_PendingAutoCamera = null;
+                MVXRSDK.RaiseDirectorRequestResult(false);
+                return;
+            }
+            if (!resp.Success)
+            {
+                MVXRSDKLog.Warning("StreamManager: DirectorInsert 被中控拒绝 Success=false");
+                s_PendingAutoCamera = null;
+                MVXRSDK.RaiseDirectorRequestResult(false);
+                return;
+            }
+            MVXRSDKLog.Info("StreamManager: DirectorInsert 已受理（被选中与否以 NotifyLive 为准）");
+            MVXRSDK.RaiseDirectorRequestResult(true);
         }
 
         internal static void PushGameAudioPcm(float[] pcm, int sampleRate, int channels)

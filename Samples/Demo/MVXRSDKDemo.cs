@@ -332,7 +332,12 @@ public sealed class MVXRSDKDemo : MonoBehaviour
         // 真链路：发请求 → 中控仲裁 → server 推回 OnDirectorSelected → 本组件订阅事件
         // → 判 deviceId == MVXRSDK.DeviceId 后调 rig.SwitchCameraTemporary 真切
         // SDK 不做业务编排，编排在 Rig + 本组件这里
-        MVXRSDK.SendDirectorRequest(directorLenses, directorDurationSec);
+        MVXRSDK.SendDirectorRequest(new DirectorRequestOptions
+        {
+            Source      = DirectorSource.Unity,
+            Lenses      = directorLenses,
+            DurationSec = directorDurationSec,
+        });
         Debug.Log($"[MVXRSDKDemo] SendDirectorRequest lenses={directorLenses} duration={directorDurationSec}s —— 等中控回包");
     }
 
