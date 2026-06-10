@@ -428,6 +428,8 @@ v3 切镜由中控仲裁：多个客户端各自调 `SendDirectorRequest` 请求
     业务在此回调中 ClearStreamSource()
 ```
 
+**`OnDirectorSelected` 事件**（`Action<string, bool, int, int>`，参数：deviceId、isPrimary、slot、durationSec）：中控仲裁结果的协议透传，v3 起**目前业务无需处理**——被选中的信号以 NotifyLive（即 `OnPushStreamStarting`）为准，本事件仅保留作协议观测/日志用途。
+
 #### 8.4.2 `DirectorRequestOptions` 与 `DirectorSource`
 
 ```csharp
@@ -445,7 +447,7 @@ var opts = new DirectorRequestOptions
 };
 ```
 
-`DurationSec <= 0` → 请求被拒；`Lenses < 1` → 按 1 处理并 Warning；空 Source → 原直播（合法值，SDK 原样透传）。
+`DurationSec <= 0` → 请求被拒；`Lenses < 1` → 按 1 处理并 Warning；空 `Source` 是合法协议值（= 原直播）：**纯请求重载**下 SDK 原样透传、不做默认填充；**自动接源重载**（带 camera 参数）下留空会自动补 `DirectorSource.Unity`（传了相机即明确本机机位）。
 
 #### 8.4.3 推荐用法：自动接源重载（一行请求 + 自动管理）
 
