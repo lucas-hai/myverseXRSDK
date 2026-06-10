@@ -15,10 +15,17 @@ namespace MyVerseXRSDK
         // ============================== 字段 ==============================
 
         private static Transform m_SelfTransform;
-        internal static Transform SelfTransform => m_SelfTransform;
+        internal static Transform SelfTransform
+        {
+            // 节点被外部销毁后，把"悬挂引用"归一为真 null，避免下游误用已销毁对象
+            get { if (m_SelfTransform == null) m_SelfTransform = null; return m_SelfTransform; }
+        }
 
         private static Transform m_XROffsetNode;
-        internal static Transform XROffsetNode => m_XROffsetNode;
+        internal static Transform XROffsetNode
+        {
+            get { if (m_XROffsetNode == null) m_XROffsetNode = null; return m_XROffsetNode; }
+        }
 
         // ============================== 内部事件（仅 SDK 内部模块订阅）==============================
 
@@ -106,18 +113,24 @@ namespace MyVerseXRSDK
         /// </summary>
         public static void UnRegisterXROffsetNode()
         {
-            if (m_XROffsetNode == null)
+            // 用 ReferenceEquals 而非 ==null：节点"已被外部销毁但 C# 引用还在"时仍要走完注销，
+            // 让障碍物/角色模块清理挂在 XR 子树下的悬挂 GO。仅"从未注册(真 null)"才幂等忽略。
+            if (ReferenceEquals(m_XROffsetNode, null))
             {
                 MVXRSDKLog.Warning("UnRegisterXROffsetNode:未注册XR偏移节点,无法注销");
                 return;
             }
 
-            // 自身节点（玩家相机）若挂在 XR 子树下，XR 注销后会被一同销毁，这里连带注销，
-            // 清掉内部悬挂引用，避免后续读到已销毁的 SelfTransform。
+            bool xrAlive = m_XROffsetNode != null; // Unity 重载：false 表示已被销毁
+
+            // 自身节点（玩家相机）若挂在 XR 子树下会随 XR 一同销毁，或已随之销毁——
+            // 两种情况都连带注销，清掉内部悬挂引用，避免后续读到已销毁的 SelfTransform。
             // Self 独立挂载（不在 XR 下）则保留，维持 XROffset / Self 节点独立性。
-            if (m_SelfTransform != null && m_SelfTransform.IsChildOf(m_XROffsetNode))
+            bool selfReferenced = !ReferenceEquals(m_SelfTransform, null);
+            bool selfDestroyed  = selfReferenced && m_SelfTransform == null;
+            if (selfReferenced && (selfDestroyed || (xrAlive && m_SelfTransform.IsChildOf(m_XROffsetNode))))
             {
-                MVXRSDKLog.Info("UnRegisterXROffsetNode: 自身节点位于 XR 子树下，连带注销");
+                MVXRSDKLog.Info("UnRegisterXROffsetNode: 自身节点位于 XR 子树下或已随之销毁，连带注销");
                 UnRegisterSelfNode();
             }
 
@@ -178,7 +191,8 @@ namespace MyVerseXRSDK
         /// </summary>
         public static void UnRegisterSelfNode()
         {
-            if (m_SelfTransform == null)
+            // ReferenceEquals：已被外部销毁但引用还在时也要清理（StopReporterOn 内部已判空安全）
+            if (ReferenceEquals(m_SelfTransform, null))
             {
                 MVXRSDKLog.Warning("UnRegisterSelfNode: 未注册自身节点，无法注销");
                 return;

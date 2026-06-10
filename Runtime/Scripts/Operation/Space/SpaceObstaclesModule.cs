@@ -73,6 +73,9 @@ namespace MyVerseXRSDK
         {
             if (obstacles == null) return;
 
+            // 先剔除被外部销毁的悬挂条目，否则下面"按数量增删"的判定会错位、并对已销毁 GO 操作引发 NRE
+            PruneDestroyed();
+
             var serverCount = obstacles.Count;
             var clientCount = m_ObstacleDict.Count;
             if (serverCount > clientCount)      AddObstacle(obstacles, parent);
@@ -122,6 +125,8 @@ namespace MyVerseXRSDK
             foreach (var obstacle in obstacles)
             {
                 if (!m_ObstacleDict.TryGetValue(obstacle.Id, out var data)) continue;
+                // GO 可能已被外部销毁（如随 XR 子树卸载），判空跳过；条目会在下次 Reconcile 由 Prune 清理
+                if (data.obstacleGO == null) continue;
 
                 if (obstacle.ModuleId != data.data.ModuleId)
                 {
@@ -190,6 +195,26 @@ namespace MyVerseXRSDK
                 default:
                     MVXRSDKLog.Error($"GetObstacleKeyName: 未知障碍物类型 {type}");
                     return null;
+            }
+        }
+
+        // 移除已被外部销毁（如随 XR 子树卸载）的障碍物条目，保持 dict.Count 与实际 GO 数量一致
+        private void PruneDestroyed()
+        {
+            if (m_ObstacleDict.Count == 0) return;
+            List<string> dead = null;
+            foreach (var kv in m_ObstacleDict)
+                if (kv.Value.obstacleGO == null) (dead ??= new List<string>()).Add(kv.Key); // Unity 重载 == 识别已销毁
+            if (dead == null) return;
+
+            foreach (var key in dead)
+            {
+                if (m_ObstacleDict.TryGetValue(key, out var data))
+                {
+                    ResSystem.PushObjectInPool(data); // GO 已不存在，仅回收数据壳
+                    m_ObstacleDict.Remove(key);
+                }
+                MVXRSDKLog.Warning($"PruneDestroyed: 障碍物 {key} 的 GO 已被外部销毁，移除悬挂条目");
             }
         }
 
