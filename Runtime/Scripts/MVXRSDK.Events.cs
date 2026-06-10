@@ -61,6 +61,21 @@ namespace MyVerseXRSDK
         public static event Action<string, bool, int, int> OnDirectorSelected;
 
         /// <summary>
+        /// SDK 接受推流指令、开始建立会话时触发（早于 OnPushStreamStarted 约 1~2s 的握手期）。
+        /// NotifyLive(start) 即"本机被选中"的信号——业务应在此回调中 SetStreamSource 接相机，
+        /// 使首帧即有画面；没被选中就不接源（避免相机白渲染）。SDK 内部自动重试不重复触发。
+        /// 参数：streamServerIp。
+        /// </summary>
+        public static event Action<string> OnPushStreamStarting;
+
+        /// <summary>
+        /// 中控对 DirectorInsert 请求的应答。success 仅表示请求被受理，
+        /// 是否真的被选中推流仍以 NotifyLive（即 OnPushStreamStarting）为准。
+        /// 参数校验失败 / WS 未连接 / 应答错误 / Response.success=false 都触发 false。
+        /// </summary>
+        public static event Action<bool> OnDirectorRequestResult;
+
+        /// <summary>
         /// 全局错误聚合事件（v2）。任何域的失败回调都会同步广播一份到这里，便于
         /// 业务侧统一接监控/上报（不再需要分别订阅 OnPushStreamFailed / OnRecordResult 等）。
         /// 参数：错误码、错误信息、来源模块名（"Stream" / "Record" / "Socket" / "Room" 等）。
@@ -82,6 +97,8 @@ namespace MyVerseXRSDK
         }
         internal static void RaiseDirectorSelected(string deviceId, bool isPrimary, int slot, int durationSec) =>
             OnDirectorSelected?.Invoke(deviceId, isPrimary, slot, durationSec);
+        internal static void RaisePushStreamStarting(string streamServerIp) => OnPushStreamStarting?.Invoke(streamServerIp);
+        internal static void RaiseDirectorRequestResult(bool success) => OnDirectorRequestResult?.Invoke(success);
 
         /// <summary>SDK 内部任何失败路径都可调本方法上报到全局 OnError，便于业务统一监控。</summary>
         internal static void RaiseError(MVXRSDKErrorCode code, string msg, string source)
@@ -96,6 +113,8 @@ namespace MyVerseXRSDK
             OnPushStreamStats = null;
             OnRecordResult = null;
             OnDirectorSelected = null;
+            OnPushStreamStarting = null;
+            OnDirectorRequestResult = null;
             OnError = null;
         }
     }
