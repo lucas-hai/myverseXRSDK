@@ -32,8 +32,9 @@ namespace MyVerseXRSDK
         private static int s_StreamRetryGen;
         // 自动接源 pending：camera 重载缓存的相机；会话启动时消费（见 TryAutoAttachPendingCamera, Task 8 接线）
         private static UnityEngine.Camera s_PendingAutoCamera;
-        // 当前画面源是否由 SDK 自动接上（谁接的谁清：停流时 SDK 自动清；手动接的业务自清）
-        private static bool s_AutoAttachedActive;
+        // SDK 自动接上的源实例（谁接的谁清）。记实例而非 bool：相机销毁自保护或业务换源后，
+        // 清理时用同一性比对，避免把业务手动接的源误清掉
+        private static IStreamSource s_AutoAttachedSource;
 
         // === 生命周期 ===
 
@@ -131,7 +132,7 @@ namespace MyVerseXRSDK
             s_RetryAttempts = 0;
             s_LatestStats = null;
             s_PendingAutoCamera = null;
-            s_AutoAttachedActive = false;
+            s_AutoAttachedSource = null;
         }
 
         // === 对 MVXRSDK Facade 暴露的方法 ===
@@ -419,11 +420,27 @@ namespace MyVerseXRSDK
                 MVXRSDKLog.Info("StreamManager: 业务已手动接源，自动接源跳过（手动优先）");
                 return;
             }
-            if (TextureProviderSystem.SwitchSource(new CameraStreamSource(cam)))
+            var autoSource = new CameraStreamSource(cam);
+            if (TextureProviderSystem.SwitchSource(autoSource))
             {
-                s_AutoAttachedActive = true;
+                s_AutoAttachedSource = autoSource;
                 MVXRSDKLog.Info($"StreamManager: 已自动接源 Camera({cam.name})，停流时自动清除");
             }
+        }
+
+        /// <summary>
+        /// 清理 SDK 自动接的画面源。同一性比对：只有当前源仍是自动接的那个实例才真正清源——
+        /// 相机销毁自保护或业务换源后当前源已不是它，此时只复位记录，不动业务的源。
+        /// </summary>
+        private static void ClearAutoAttachedSource(string reason)
+        {
+            if (s_AutoAttachedSource == null) return;
+            if (ReferenceEquals(TextureProviderSystem.CurrentSource, s_AutoAttachedSource))
+            {
+                TextureProviderSystem.ClearSource();
+                MVXRSDKLog.Info($"StreamManager: {reason}，自动接的画面源已清除");
+            }
+            s_AutoAttachedSource = null;
         }
 
         /// <summary>判断错误码是否值得自动重试——仅运行时可恢复错误（ICE / DTLS / 连接断开），
@@ -548,12 +565,7 @@ namespace MyVerseXRSDK
             // 停流后清空 stats 快照，避免业务侧拿到陈旧数据
             s_LatestStats = null;
             // 谁接的谁清：SDK 自动接的源停流时自动清除；业务手动接的由业务自清
-            if (s_AutoAttachedActive)
-            {
-                s_AutoAttachedActive = false;
-                TextureProviderSystem.ClearSource();
-                MVXRSDKLog.Info("StreamManager: 停流，自动接的画面源已清除");
-            }
+            ClearAutoAttachedSource("停流");
             EventSystem.EventTrigger(MVXRSDKEventType.PUSH_STREAM_STOPPED, reason);
             MVXRSDK.RaisePushStreamStopped(reason);
         }
@@ -576,11 +588,9 @@ namespace MyVerseXRSDK
                 willRetry = ScheduleStreamRetry();
             }
             // 失败终态（不再重试）：自动接的源没有后续会话可服务，清掉避免相机白渲染
-            if (!willRetry && s_AutoAttachedActive)
+            if (!willRetry)
             {
-                s_AutoAttachedActive = false;
-                TextureProviderSystem.ClearSource();
-                MVXRSDKLog.Info("StreamManager: 推流失败且不再重试，自动接的画面源已清除");
+                ClearAutoAttachedSource("推流失败且不再重试");
             }
         }
 
