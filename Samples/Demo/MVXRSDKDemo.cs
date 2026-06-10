@@ -59,8 +59,8 @@ public sealed class MVXRSDKDemo : MonoBehaviour
     public Transform[] rootNodes;
 
     [Header("推流装配（拖同 GO 上的 MVXRStreamRig）")]
-    [Tooltip("MVXRStreamRig 引用。主相机 / 游戏音 / 麦克风 / 切镜目标数组配在 Rig 自己的 Inspector。\n" +
-             "本组件只负责 SDK 事件 ↔ Rig 业务接线。")]
+    [Tooltip("MVXRStreamRig 引用。游戏音 / 麦克风 / StreamConfig 配在 Rig 自己的 Inspector；\n" +
+             "画面源管理由业务侧直接调 MVXRSDK API（本组件演示 SendDirectorRequest 自动接源）。")]
     public MVXRStreamRig streamRig;
 
     [Header("录屏（按 R / ContextMenu）")]
