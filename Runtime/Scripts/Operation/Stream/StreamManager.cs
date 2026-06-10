@@ -381,6 +381,13 @@ namespace MyVerseXRSDK
                 }
 
                 m_PushModule.Start(url);
+                // Start 同步失败（factory null 等）会回落 Idle；只有真正进入会话才抛 Starting
+                // 注：内部自动重试（StreamRetryCoroutine）不走本路径，不会重复触发
+                if (m_PushModule.State != PushStreamState.Idle)
+                {
+                    MVXRSDK.RaisePushStreamStarting(url);
+                    TryAutoAttachPendingCamera();
+                }
             }
             else
             {
@@ -389,6 +396,33 @@ namespace MyVerseXRSDK
                 s_RetryAttempts = 0;
                 CancelStreamRetry();
                 m_PushModule.Stop(StreamStopReason.ServerStop);
+            }
+        }
+
+        /// <summary>
+        /// 消费自动接源 pending 相机（SendDirectorRequest camera 重载缓存）。
+        /// 时机：会话启动、OnPushStreamStarting 已抛出之后——业务在事件回调里手动接源优先，
+        /// 此处发现已有源即放弃（Info，预期行为非告警）。
+        /// </summary>
+        private static void TryAutoAttachPendingCamera()
+        {
+            var cam = s_PendingAutoCamera;
+            s_PendingAutoCamera = null;   // 一次性消费
+            if (ReferenceEquals(cam, null)) return;
+            if (cam == null)              // Unity 假 null：pending 期间相机被销毁
+            {
+                MVXRSDKLog.Warning("StreamManager: pending 自动接源相机已被销毁，放弃自动接源（推黑帧）");
+                return;
+            }
+            if (TextureProviderSystem.HasSource)
+            {
+                MVXRSDKLog.Info("StreamManager: 业务已手动接源，自动接源跳过（手动优先）");
+                return;
+            }
+            if (TextureProviderSystem.SwitchSource(new CameraStreamSource(cam)))
+            {
+                s_AutoAttachedActive = true;
+                MVXRSDKLog.Info($"StreamManager: 已自动接源 Camera({cam.name})，停流时自动清除");
             }
         }
 
@@ -409,19 +443,20 @@ namespace MyVerseXRSDK
         }
 
         /// <summary>OnPushStreamFailed 后调度一次自动重试。重试节奏由 StreamConfig 控制；
-        /// 达到上限后停止，等 server 再推 NotifyLive 或业务侧主动触发。</summary>
-        private static void ScheduleStreamRetry()
+        /// 达到上限后停止，等 server 再推 NotifyLive 或业务侧主动触发。
+        /// 返回是否真的调度了重试。</summary>
+        private static bool ScheduleStreamRetry()
         {
             var delays = StreamConfig.Active.PushStreamRetryDelaysMs;
             if (delays == null || delays.Length == 0)
             {
                 MVXRSDKLog.Info("StreamManager: PushStreamRetryDelaysMs 为空，不自动重试");
-                return;
+                return false;
             }
             if (s_RetryAttempts >= delays.Length)
             {
                 MVXRSDKLog.Warning($"StreamManager: 推流连续失败 {s_RetryAttempts} 次，自动重试已耗尽，等 server 再推 NotifyLive 或业务侧重启");
-                return;
+                return false;
             }
             int delayMs = delays[s_RetryAttempts];
             int attemptIdx = s_RetryAttempts + 1;
@@ -431,6 +466,7 @@ namespace MyVerseXRSDK
             int genSnapshot = s_StreamRetryGen;  // capture：协程内对比这个值判断是否已被作废
             MVXRSDKLog.Info($"StreamManager: 调度推流自动重试 attempt={attemptIdx}/{delays.Length} delay={delayMs}ms url={s_LastStreamUrl}");
             s_StreamRetryCoroutine = MonoSystem.Start_Coroutine(StreamRetryCoroutine(delayMs, attemptIdx, delays.Length, genSnapshot));
+            return true;
         }
 
         private static IEnumerator StreamRetryCoroutine(int delayMs, int attemptIdx, int totalAttempts, int gen)
@@ -511,6 +547,13 @@ namespace MyVerseXRSDK
         {
             // 停流后清空 stats 快照，避免业务侧拿到陈旧数据
             s_LatestStats = null;
+            // 谁接的谁清：SDK 自动接的源停流时自动清除；业务手动接的由业务自清
+            if (s_AutoAttachedActive)
+            {
+                s_AutoAttachedActive = false;
+                TextureProviderSystem.ClearSource();
+                MVXRSDKLog.Info("StreamManager: 停流，自动接的画面源已清除");
+            }
             EventSystem.EventTrigger(MVXRSDKEventType.PUSH_STREAM_STOPPED, reason);
             MVXRSDK.RaisePushStreamStopped(reason);
         }
@@ -527,9 +570,17 @@ namespace MyVerseXRSDK
             MVXRSDK.RaisePushStreamFailed(code, msg);
 
             // 仅对可恢复运行时错误自动重试，且需有缓存 URL（说明上一次是真有 NotifyLive 触发过）
+            bool willRetry = false;
             if (IsRetriableStreamError(code) && !string.IsNullOrEmpty(s_LastStreamUrl))
             {
-                ScheduleStreamRetry();
+                willRetry = ScheduleStreamRetry();
+            }
+            // 失败终态（不再重试）：自动接的源没有后续会话可服务，清掉避免相机白渲染
+            if (!willRetry && s_AutoAttachedActive)
+            {
+                s_AutoAttachedActive = false;
+                TextureProviderSystem.ClearSource();
+                MVXRSDKLog.Info("StreamManager: 推流失败且不再重试，自动接的画面源已清除");
             }
         }
 
