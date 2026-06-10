@@ -108,16 +108,17 @@ public static partial class LogicReflection {
           "YW1TZXJ2ZXJJcBgBIAEoCRINCgVzdGFydBgCIAEoCBIQCghkZXZpY2VJZBgD",
           "IAEoCSJkCgxEZXZpY2VSZXBvcnQaNwoHUmVxdWVzdBIKCgJvcBgBIAEoCRIQ",
           "CghkZXZpY2VJZBgCIAEoCRIOCgZyb29tSWQYAyABKAkaGwoIUmVzcG9uc2US",
-          "DwoHc3VjY2VzcxgBIAEoCCJdCg5EaXJlY3Rvckluc2VydBouCgdSZXF1ZXN0",
-          "Eg4KBmxlbnNlcxgBIAEoBRITCgtkdXJhdGlvblNlYxgCIAEoBRobCghSZXNw",
-          "b25zZRIPCgdzdWNjZXNzGAEgASgIIloKEERpcmVjdG9yU2VsZWN0ZWQSEAoI",
-          "ZGV2aWNlSWQYASABKAkSEQoJaXNQcmltYXJ5GAIgASgIEgwKBHNsb3QYAyAB",
-          "KAUSEwoLZHVyYXRpb25TZWMYBCABKAUiJgoSRGlyZWN0b3JEZXNlbGVjdGVk",
-          "EhAKCGRldmljZUlkGAEgASgJIpUBCgtTdGFydFJlY29yZBppCgdSZXF1ZXN0",
-          "EhIKCnJlYWxDYW1lcmEYASABKAgSEAoIY2FtZXJhSWQYAiABKAkSEAoIZHVy",
-          "YXRpb24YAyABKAUSEAoIZmlsZU5hbWUYBCABKAkSFAoMcGljb0RldmljZUlk",
-          "GAUgASgJGhsKCFJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAhCJVojLi9sb2dp",
-          "Yy9nZW5lcmF0ZWQvbG9naWNfcGI7bG9naWNfcGJiBnByb3RvMw=="));
+          "DwoHc3VjY2VzcxgBIAEoCCJ9Cg5EaXJlY3Rvckluc2VydBpOCgdSZXF1ZXN0",
+          "Eg4KBmxlbnNlcxgBIAEoBRITCgtkdXJhdGlvblNlYxgCIAEoBRIOCgZzb3Vy",
+          "Y2UYAyABKAkSDgoGcmVjb3JkGAQgASgIGhsKCFJlc3BvbnNlEg8KB3N1Y2Nl",
+          "c3MYASABKAgiWgoQRGlyZWN0b3JTZWxlY3RlZBIQCghkZXZpY2VJZBgBIAEo",
+          "CRIRCglpc1ByaW1hcnkYAiABKAgSDAoEc2xvdBgDIAEoBRITCgtkdXJhdGlv",
+          "blNlYxgEIAEoBSImChJEaXJlY3RvckRlc2VsZWN0ZWQSEAoIZGV2aWNlSWQY",
+          "ASABKAkilQEKC1N0YXJ0UmVjb3JkGmkKB1JlcXVlc3QSEgoKcmVhbENhbWVy",
+          "YRgBIAEoCBIQCghjYW1lcmFJZBgCIAEoCRIQCghkdXJhdGlvbhgDIAEoBRIQ",
+          "CghmaWxlTmFtZRgEIAEoCRIUCgxwaWNvRGV2aWNlSWQYBSABKAkaGwoIUmVz",
+          "cG9uc2USDwoHc3VjY2VzcxgBIAEoCEIlWiMuL2xvZ2ljL2dlbmVyYXRlZC9s",
+          "b2dpY19wYjtsb2dpY19wYmIGcHJvdG8z"));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
@@ -169,7 +170,7 @@ public static partial class LogicReflection {
           new pbr::GeneratedClrTypeInfo(typeof(global::NotifyLive), global::NotifyLive.Parser, new[]{ "StreamServerIp", "Start", "DeviceId" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::DeviceReport), global::DeviceReport.Parser, null, null, null, null, new pbr::GeneratedClrTypeInfo[] { new pbr::GeneratedClrTypeInfo(typeof(global::DeviceReport.Types.Request), global::DeviceReport.Types.Request.Parser, new[]{ "Op", "DeviceId", "RoomId" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::DeviceReport.Types.Response), global::DeviceReport.Types.Response.Parser, new[]{ "Success" }, null, null, null, null)}),
-          new pbr::GeneratedClrTypeInfo(typeof(global::DirectorInsert), global::DirectorInsert.Parser, null, null, null, null, new pbr::GeneratedClrTypeInfo[] { new pbr::GeneratedClrTypeInfo(typeof(global::DirectorInsert.Types.Request), global::DirectorInsert.Types.Request.Parser, new[]{ "Lenses", "DurationSec" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::DirectorInsert), global::DirectorInsert.Parser, null, null, null, null, new pbr::GeneratedClrTypeInfo[] { new pbr::GeneratedClrTypeInfo(typeof(global::DirectorInsert.Types.Request), global::DirectorInsert.Types.Request.Parser, new[]{ "Lenses", "DurationSec", "Source", "Record" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::DirectorInsert.Types.Response), global::DirectorInsert.Types.Response.Parser, new[]{ "Success" }, null, null, null, null)}),
           new pbr::GeneratedClrTypeInfo(typeof(global::DirectorSelected), global::DirectorSelected.Parser, new[]{ "DeviceId", "IsPrimary", "Slot", "DurationSec" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::DirectorDeselected), global::DirectorDeselected.Parser, new[]{ "DeviceId" }, null, null, null, null),
@@ -11039,6 +11040,8 @@ public sealed partial class DirectorInsert : pb::IMessage<DirectorInsert> {
       public Request(Request other) : this() {
         lenses_ = other.lenses_;
         durationSec_ = other.durationSec_;
+        source_ = other.source_;
+        record_ = other.record_;
         _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
       }
 
@@ -11075,6 +11078,34 @@ public sealed partial class DirectorInsert : pb::IMessage<DirectorInsert> {
         }
       }
 
+      /// <summary>Field number for the "source" field.</summary>
+      public const int SourceFieldNumber = 3;
+      private string source_ = "";
+      /// <summary>
+      /// 机位来源: "unity"=本机 Unity 游戏内机位; 空/"mr"=原直播
+      /// </summary>
+      [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+      public string Source {
+        get { return source_; }
+        set {
+          source_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+        }
+      }
+
+      /// <summary>Field number for the "record" field.</summary>
+      public const int RecordFieldNumber = 4;
+      private bool record_;
+      /// <summary>
+      /// 是否录制这一段: true=录; false/不填=不录
+      /// </summary>
+      [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+      public bool Record {
+        get { return record_; }
+        set {
+          record_ = value;
+        }
+      }
+
       [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
       public override bool Equals(object other) {
         return Equals(other as Request);
@@ -11090,6 +11121,8 @@ public sealed partial class DirectorInsert : pb::IMessage<DirectorInsert> {
         }
         if (Lenses != other.Lenses) return false;
         if (DurationSec != other.DurationSec) return false;
+        if (Source != other.Source) return false;
+        if (Record != other.Record) return false;
         return Equals(_unknownFields, other._unknownFields);
       }
 
@@ -11098,6 +11131,8 @@ public sealed partial class DirectorInsert : pb::IMessage<DirectorInsert> {
         int hash = 1;
         if (Lenses != 0) hash ^= Lenses.GetHashCode();
         if (DurationSec != 0) hash ^= DurationSec.GetHashCode();
+        if (Source.Length != 0) hash ^= Source.GetHashCode();
+        if (Record != false) hash ^= Record.GetHashCode();
         if (_unknownFields != null) {
           hash ^= _unknownFields.GetHashCode();
         }
@@ -11119,6 +11154,14 @@ public sealed partial class DirectorInsert : pb::IMessage<DirectorInsert> {
           output.WriteRawTag(16);
           output.WriteInt32(DurationSec);
         }
+        if (Source.Length != 0) {
+          output.WriteRawTag(26);
+          output.WriteString(Source);
+        }
+        if (Record != false) {
+          output.WriteRawTag(32);
+          output.WriteBool(Record);
+        }
         if (_unknownFields != null) {
           _unknownFields.WriteTo(output);
         }
@@ -11132,6 +11175,12 @@ public sealed partial class DirectorInsert : pb::IMessage<DirectorInsert> {
         }
         if (DurationSec != 0) {
           size += 1 + pb::CodedOutputStream.ComputeInt32Size(DurationSec);
+        }
+        if (Source.Length != 0) {
+          size += 1 + pb::CodedOutputStream.ComputeStringSize(Source);
+        }
+        if (Record != false) {
+          size += 1 + 1;
         }
         if (_unknownFields != null) {
           size += _unknownFields.CalculateSize();
@@ -11150,6 +11199,12 @@ public sealed partial class DirectorInsert : pb::IMessage<DirectorInsert> {
         if (other.DurationSec != 0) {
           DurationSec = other.DurationSec;
         }
+        if (other.Source.Length != 0) {
+          Source = other.Source;
+        }
+        if (other.Record != false) {
+          Record = other.Record;
+        }
         _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
       }
 
@@ -11167,6 +11222,14 @@ public sealed partial class DirectorInsert : pb::IMessage<DirectorInsert> {
             }
             case 16: {
               DurationSec = input.ReadInt32();
+              break;
+            }
+            case 26: {
+              Source = input.ReadString();
+              break;
+            }
+            case 32: {
+              Record = input.ReadBool();
               break;
             }
           }
