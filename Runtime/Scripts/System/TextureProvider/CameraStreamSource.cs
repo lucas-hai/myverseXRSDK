@@ -62,6 +62,9 @@ namespace MyVerseXRSDK
             m_Camera.enabled = true;
             m_Attached = true;
 
+            // 相机销毁自保护（设计 §4.3）：业务忘了在场景卸载前 ClearStreamSource 时兜底
+            MonoSystem.AddLateUpdateListener(SelfProtectTick);
+
             try { OnAttached?.Invoke(); }
             catch (Exception ex) { MVXRSDKLog.Error($"CameraStreamSource: OnAttached 回调异常 {ex}"); }
         }
@@ -69,6 +72,7 @@ namespace MyVerseXRSDK
         public void Detach()
         {
             if (!m_Attached) return;
+            MonoSystem.RemoveLateUpdateListener(SelfProtectTick);
             // 只在 targetTexture 仍是我们设置的那张 RT 时还原；
             // 业务侧若中途自己改了 targetTexture，不覆盖业务的赋值
             if (m_Camera != null && m_Camera.targetTexture == m_AttachedTarget)
@@ -86,6 +90,16 @@ namespace MyVerseXRSDK
 
             try { OnDetached?.Invoke(); }
             catch (Exception ex) { MVXRSDKLog.Error($"CameraStreamSource: OnDetached 回调异常 {ex}"); }
+        }
+
+        /// <summary>
+        /// attach 期间每帧检查相机是否已被销毁（典型：场景卸载前业务未 ClearStreamSource）。
+        /// 销毁后自动让 TextureProviderSystem 清源推黑帧；Detach 时本 tick 随之摘除。
+        /// </summary>
+        private void SelfProtectTick()
+        {
+            if (m_Camera != null) return;   // Unity null：未销毁则啥都不做
+            TextureProviderSystem.HandleSourceCameraDestroyed(this);
         }
 
         public void Dispose()
