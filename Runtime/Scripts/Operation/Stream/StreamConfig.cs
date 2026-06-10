@@ -20,11 +20,10 @@ namespace MyVerseXRSDK
         public int Fps = 30;
 
         /// <summary>
-        /// 推流画面长边像素上限。按原画面比例同比例缩放保持不形变，缩放发生在
-        /// RenderTextureStreamSource.BlitTick 的 Graphics.Blit（→ InternalRT）。
-        /// 0 = 不限（使用源 RT 原始尺寸）。
-        /// 仅在 <see cref="Streaming.MVXRStreamRig"/> Attach 阶段读取一次；推流进行中修改不会
-        /// 重建 RT，需 Stop → Start。业务自管 IStreamSource 时此字段无效。
+        /// 推流 InternalRT 长边像素（固定 16:9，偶数对齐；默认 1280 → 1280x720）。
+        /// v3 起 InternalRT 尺寸由本字段决定、与画面源无关：CameraStreamSource 相机按 RT
+        /// 尺寸渲染（比例永远正确）；RenderTextureStreamSource Blit 缩放适配（非 16:9 外部
+        /// RT 会拉伸）。≤0 时按 1280 处理。RT 创建后修改不重建，需 UnInit → Init。
         /// </summary>
         public int StreamMaxLongSide = 1280;
 

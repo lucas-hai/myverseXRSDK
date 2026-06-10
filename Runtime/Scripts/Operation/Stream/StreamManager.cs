@@ -51,10 +51,13 @@ namespace MyVerseXRSDK
 
             m_PushModule = new PushStreamModule();
             m_PushModule.SetDependencies(
-                getSource: () => TextureProviderSystem.InternalRT,
+                getSource: () => TextureProviderSystem.EnsureInternalRT(),
                 sessionFactory: () => new WebRTCSystem(),
                 whipFactory: () => new WhipClient(new UnityWebRequestHttpTransport())
             );
+            // 一相机推流保护：推流会话活跃（Starting/Started）期间已有源则 SwitchSource 丢弃新源
+            TextureProviderSystem.SetSessionActivePredicate(
+                () => m_PushModule != null && m_PushModule.State != PushStreamState.Idle);
             m_PushModule.OnStarted += HandlePushStarted;
             m_PushModule.OnStopped += HandlePushStopped;
             m_PushModule.OnFailed  += HandlePushFailed;
@@ -144,7 +147,7 @@ namespace MyVerseXRSDK
             {
                 if (m_PushModule != null && m_PushModule.State != PushStreamState.Idle)
                 {
-                    MVXRSDKLog.Warning("StreamManager: 推流期间清空 source，VideoStreamTrack 将失去画面");
+                    MVXRSDKLog.Warning("StreamManager: 推流期间清空 source，将推黑帧直到重新接源");
                 }
                 TextureProviderSystem.ClearSource();
                 return;
@@ -164,7 +167,7 @@ namespace MyVerseXRSDK
             {
                 if (m_PushModule != null && m_PushModule.State != PushStreamState.Idle)
                 {
-                    MVXRSDKLog.Warning("StreamManager: 推流期间清空 source，VideoStreamTrack 将失去画面");
+                    MVXRSDKLog.Warning("StreamManager: 推流期间清空 source，将推黑帧直到重新接源");
                 }
                 TextureProviderSystem.ClearSource();
                 return;

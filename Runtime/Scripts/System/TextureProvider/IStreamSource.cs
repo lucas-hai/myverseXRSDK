@@ -10,14 +10,15 @@ namespace MyVerseXRSDK
     ///
     /// 切源不断流约定：SDK 维护一张长生命周期 RT（VideoStreamTrack 绑定），
     /// SwitchSource 时只 Detach 旧 source + Attach 新 source 到同一张 RT；
-    /// **要求新旧 source 的 Width/Height 一致**，否则 SwitchSource 会拒绝（视频编码器无法热切尺寸）。
+    /// InternalRT 为固定尺寸（StreamConfig.StreamMaxLongSide 按 16:9），任意源可热切；
+    /// 推流会话活跃且已有源时 SwitchSource 会丢弃新源（一相机推流保护）。
     /// </summary>
     public interface IStreamSource : IDisposable
     {
-        /// <summary>该 source 期望的输出宽度（像素）。决定 SDK 内部 RT 的尺寸。</summary>
+        /// <summary>画面源宽（像素，仅信息展示用；不再参与 InternalRT 尺寸决策）。</summary>
         int Width { get; }
 
-        /// <summary>该 source 期望的输出高度（像素）。</summary>
+        /// <summary>画面源高（像素，仅信息展示用）。</summary>
         int Height { get; }
 
         /// <summary>用于日志/调试展示，如 "Camera(MainCam)" / "RT(1280x720)"。</summary>
