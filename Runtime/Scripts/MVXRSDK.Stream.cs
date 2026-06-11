@@ -73,9 +73,10 @@ namespace MyVerseXRSDK
         // ============================== 音频 PCM 推送 ==============================
 
         /// <summary>
-        /// 推送游戏音频 PCM 给 SDK（推流音频源之一）。
+        /// 推送游戏音频 PCM 给 SDK（推流唯一音频源；不推麦克风语音）。
         /// 推荐挂在 AudioListener 同 GameObject 的 OnAudioFilterRead 里调用。
-        /// 支持 48000 / 44100 Hz；mono 或 stereo（stereo 内部自动平均成 mono）。
+        /// 支持 8000–192000 Hz（与设备输出率一致时直通零重采样，否则 SDK 线性重采样）；
+        /// mono 或 stereo（stereo 内部自动平均成 mono）。
         /// </summary>
         /// <exception cref="ArgumentException">pcm 为 null 或采样率/通道数越界。</exception>
         public static void PushGameAudioPcm(float[] pcm, int sampleRate, int channels)
@@ -84,24 +85,14 @@ namespace MyVerseXRSDK
             StreamManager.PushGameAudioPcm(pcm, sampleRate, channels);
         }
 
-        /// <summary>
-        /// 推送麦克风 PCM 给 SDK（推流音频源之一）。
-        /// 游戏侧负责采集（如从语音 SDK 转发一份）；SDK 不主动开 AudioRecord，避免与游戏语音 SDK 抢麦克风。
-        /// 支持 48000 / 44100 Hz；mono 或 stereo。
-        /// </summary>
-        /// <exception cref="ArgumentException">pcm 为 null 或采样率/通道数越界。</exception>
-        public static void PushMicPcm(float[] pcm, int sampleRate, int channels)
-        {
-            ValidatePcmArgs(pcm, sampleRate, channels, nameof(PushMicPcm));
-            StreamManager.PushMicPcm(pcm, sampleRate, channels);
-        }
-
         private static void ValidatePcmArgs(float[] pcm, int sampleRate, int channels, string apiName)
         {
             if (pcm == null)
                 throw new ArgumentException($"{apiName}: pcm 不能为空", nameof(pcm));
-            if (sampleRate != 48000 && sampleRate != 44100)
-                throw new ArgumentException($"{apiName}: 不支持的采样率 {sampleRate}Hz（仅 48000 / 44100）", nameof(sampleRate));
+            // 采样率由设备/采集源决定（PICO 4U 输出实测 24000、语音 SDK 常见 16000），
+            // 不设白名单，只拦无意义入参；区间外视为调用方传错参数
+            if (sampleRate < 8000 || sampleRate > 192000)
+                throw new ArgumentException($"{apiName}: 不支持的采样率 {sampleRate}Hz（仅 8000–192000）", nameof(sampleRate));
             if (channels != 1 && channels != 2)
                 throw new ArgumentException($"{apiName}: 不支持的通道数 {channels}（仅 mono=1 / stereo=2）", nameof(channels));
         }

@@ -16,7 +16,7 @@ namespace MyVerseXRSDK
     ///   Dispose() 关闭 PC + 清资源；**一次性**，Dispose 后不可 reuse，需 new 一个新实例
     ///
     /// 音频源：实现内部通过 AudioMixingSystem.AttachToTrack 绑定，不再作为参数。
-    /// 业务侧通过 AudioMixingSystem.PushGameAudio / PushMicAudio 提供 PCM。
+    /// 业务侧通过 AudioMixingSystem.PushGameAudio 提供游戏音 PCM（推流不含麦克风语音）。
     ///
     /// 所有 event 回调保证在 Unity 主线程触发（实现依赖 com.unity.webrtc 内部 SynchronizationContext），
     /// 订阅方无需考虑线程同步问题。

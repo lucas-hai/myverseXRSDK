@@ -9,7 +9,8 @@ namespace MyVerseXRSDK.Streaming
     ///
     /// OnAudioFilterRead 不修改 data 不会影响扬声器输出（filter 链约定）。
     /// SDK 内部 PushGameAudioPcm 用 lock 做了线程同步，在 audio thread 调用安全。
-    /// SDK 仅支持 48k / 44.1k 采样率，工程 AudioSettings 用了其它值会被 SDK 那侧 warning 丢弃。
+    /// 采样率跟随设备输出（AudioSettings.outputSampleRate，PICO 4U 实测 24000），
+    /// 与混音工作率一致直通；SDK 接受 8k–192k。
     /// </summary>
     public sealed class GameAudioStreamCapture : IDisposable
     {

@@ -13,6 +13,7 @@
 - `MVXRStreamRig` 不再承载画面推流：`mainCamera`/`directorCameras`/`SwitchCameraTemporary`/`RestoreOriginalCamera`/`Ready`/`OnSwitched`/`OnRestored`/`StreamTexture` 删除，仅保留音频采集与 StreamConfigAsset 应用
 - `CameraStreamSource(Camera)` / `RenderTextureStreamSource(RenderTexture)` 构造去宽高参数（InternalRT 固定尺寸）
 - 删除 `CameraStreamCapture`（主相机/第一视角推流由播控承担）
+- 推流不再包含麦克风语音：删除 `MVXRSDK.PushMicPcm`、`MicrophoneStreamCapture`、`MVXRStreamRig` 的 `captureMicrophone`/`micSampleRate`/`micDevice` 字段；`AudioMixingSystem` 去掉 mic 一路（推流音频仅游戏音）
 
 ### Added
 - `DirectorSource` 常量（`"unity"`=本机 Unity 游戏内机位；空/`"mr"`=原直播）与 `DirectorRequestOptions`（Source/Lenses/DurationSec/Record 四字段）
@@ -24,6 +25,13 @@
 ### Changed
 - InternalRT 固定尺寸（`StreamConfig.StreamMaxLongSide` 按 16:9，默认 1280×720），任意源可热切；`ClearStreamSource` 清黑保留 RT，`Dispose` 才释放
 - `StreamConfig.StreamMaxLongSide` 语义更新为 InternalRT 长边（原语义：推流画面长边上限）
+- `PushGameAudioPcm` 采样率放宽：8000–192000 Hz（原 {48000, 44100} 白名单其余抛 `ArgumentException`）；音频工作采样率改为跟随设备输出率（`AudioSettings.outputSampleRate`，Init 时锁定），输入等率直通、异率线性重采样
+
+### Fixed
+- 设备音频输出非 48kHz 时游戏音推流不可用/失真（PICO 4U 实测输出 24000Hz 必现）：
+  - Rig 游戏音采集被采样率白名单拒绝，音频线程每个回调抛 `ArgumentException`（游戏音整体推不出去）
+  - 混音缓冲固定 48k 重采样与 `AudioStreamFeeder.SetData` 按设备率声明不一致 → 音调/速度失真；且 ring 写入快于消费 → 周期性丢音。现 feeder 声明率恒等于混音工作率
+- `AudioMixingSystem.PushInternal` 在音频线程打 Warning 日志的隐患移除（校验与报错统一收口到 facade `ValidatePcmArgs`）
 
 ---
 

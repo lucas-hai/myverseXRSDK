@@ -388,7 +388,7 @@ MVXRSDK.SetStreamSource(myRT);   // RT 重载，SDK 内部包一层 RenderTextur
 
 v3 起 `MVXRStreamRig` **不承载画面推流**，仅负责两件事：
 - `OnEnable` 时应用 `streamConfigAsset`（写入 `StreamConfig.Active`）
-- 装配游戏音 / 麦克风采集（`GameAudioStreamCapture` / `MicrophoneStreamCapture`）
+- 装配游戏音采集（`GameAudioStreamCapture`）；推流不含麦克风语音，SDK 不碰麦克风设备
 
 画面源管理由业务直接调 SDK 公共 API（见 §8.4）。
 
@@ -397,9 +397,6 @@ v3 起 `MVXRStreamRig` **不承载画面推流**，仅负责两件事：
 | 字段 | 说明 |
 |---|---|
 | `gameAudioListener` | 游戏音 `AudioListener`，通过 `OnAudioFilterRead` 抓 master mix。留空则不推游戏音 |
-| `captureMicrophone` | 是否采集麦克风。注意会占用麦克风设备，可能与 PICO 语音 SDK 冲突 |
-| `micSampleRate` | 麦克风采样率（48000 / 44100） |
-| `micDevice` | 麦克风设备名，留空使用系统默认 |
 | `streamConfigAsset` | 视频编码配置（`Fps` / `StreamMaxLongSide` / `VideoBandwidthKbps` / `VideoMinBitrateKbps` / `ForceH264`）。详见 [8.8.2 配置入口](#882-配置入口推荐-asset兼容代码)。留空全部走 SDK 默认 |
 
 #### 与业务自管的差异
@@ -408,7 +405,6 @@ v3 起 `MVXRStreamRig` **不承载画面推流**，仅负责两件事：
 |---|---|---|
 | 推流配置 | 拖 StreamConfigAsset 进字段，OnEnable 自动 Apply | 手调 `MVXRSDK.SetStreamConfig(cfg)` |
 | 游戏音 | 拖 AudioListener 进字段 | 自己挂脚本调 `PushGameAudioPcm` |
-| 麦克风 | 勾 `captureMicrophone` | 自己采集 PCM 调 `PushMicPcm` |
 | 推流画面 | 不涉及（v3 删除） | 调 `MVXRSDK.SendDirectorRequest(opts, camera)` 或手动 `SetStreamSource` |
 
 ------
@@ -528,7 +524,8 @@ if (!string.IsNullOrEmpty(MVXRSDK.CurrentStreamUrl))
 
 ### 8.5 音频推流（PCM 推送）
 
-SDK 不主动开 AudioRecord（避免与游戏语音 SDK 抢麦克风）。业务侧采集 PCM 后**主动调** `PushGameAudioPcm` / `PushMicPcm`，SDK 内部混音后随视频一起编码上行。
+推流音频只包含**游戏音**一路（不推麦克风语音，SDK 不碰麦克风设备、不与语音 SDK 抢麦）。
+业务侧采集 PCM 后**主动调** `PushGameAudioPcm`，SDK 内部缓冲/重采样后随视频一起编码上行。
 
 ```csharp
 // 游戏音：典型在挂 AudioListener 的 GameObject 上写 OnAudioFilterRead
@@ -537,17 +534,16 @@ private void OnAudioFilterRead(float[] data, int channels)
     // Unity 在音频线程喂数据；MVXRSDK 内部已做线程安全
     MVXRSDK.PushGameAudioPcm(data, AudioSettings.outputSampleRate, channels);
 }
-
-// 麦克风：从语音 SDK / Microphone 转发一份
-MVXRSDK.PushMicPcm(micPcm, sampleRate: 48000, channels: 1);
 ```
 
 支持：
-- 采样率：**48000 / 44100**（其它抛 `ArgumentException`）
+- 采样率：**8000–192000 Hz**（区间外抛 `ArgumentException`）。SDK 工作采样率跟随设备输出率
+  （`AudioSettings.outputSampleRate`，PICO 4U 实测 24000）：输入与工作率一致直通零重采样，
+  不一致时 SDK 线性插值重采样——所以游戏音直接传 `AudioSettings.outputSampleRate` 即可，任何设备都不需要关心具体值
 - 通道数：mono / stereo（stereo 内部自动平均成 mono）
 - `pcm == null` / 越界采样率 / 越界通道 → `ArgumentException`
 
-> 用 `MVXRStreamRig` 时不需要自己调这两个 PCM API——拖 `AudioListener` 进 `gameAudioListener` 字段、勾 `captureMicrophone` 后，Rig 内部的 `GameAudioStreamCapture` / `MicrophoneStreamCapture` 组件自动完成采集与推送。
+> 用 `MVXRStreamRig` 时不需要自己调这个 API——拖 `AudioListener` 进 `gameAudioListener` 字段后，Rig 内部的 `GameAudioStreamCapture` 自动完成采集与推送。
 
 ------
 

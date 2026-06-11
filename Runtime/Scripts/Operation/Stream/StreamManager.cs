@@ -309,12 +309,6 @@ namespace MyVerseXRSDK
             AudioMixingSystem.PushGameAudio(pcm, sampleRate, channels);
         }
 
-        internal static void PushMicPcm(float[] pcm, int sampleRate, int channels)
-        {
-            if (!m_Initialized) return;
-            AudioMixingSystem.PushMicAudio(pcm, sampleRate, channels);
-        }
-
         // === WS 消息处理（解析 pb 真实数据）===
 
         private static void OnNotifyLiveMessage(int errorCode, byte[] buffer)

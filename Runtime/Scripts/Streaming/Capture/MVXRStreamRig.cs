@@ -13,7 +13,7 @@ namespace MyVerseXRSDK.Streaming
     /// 职责：
     /// - OnEnable 时应用 StreamConfigAsset（写入 StreamConfig.Active）
     /// - 装配游戏音采集（AudioListener tap → PushGameAudioPcm）
-    /// - 装配麦克风采集（Microphone → PushMicPcm，注意与语音 SDK 抢麦）
+    /// 推流不含麦克风语音（SDK 不碰麦克风设备，不与语音 SDK 抢麦）。
     /// </summary>
     [AddComponentMenu("MyVerse XR SDK/Stream Rig")]
     [DisallowMultipleComponent]
@@ -23,15 +23,6 @@ namespace MyVerseXRSDK.Streaming
         [Tooltip("游戏音 AudioListener：通过 OnAudioFilterRead 抓 master mix。留空则不推游戏音。")]
         public AudioListener gameAudioListener;
 
-        [Tooltip("是否采集麦克风推给 SDK。注意会占用麦克风设备，可能与 Pico 语音 SDK 冲突。")]
-        public bool captureMicrophone = false;
-
-        [Tooltip("麦克风采样率，SDK 仅支持 48000 / 44100。")]
-        public int micSampleRate = 48000;
-
-        [Tooltip("麦克风设备名，留空使用系统默认。")]
-        public string micDevice = "";
-
         [Header("推流配置 Asset")]
         [Tooltip("推流视频编码参数 Asset（Fps / 长边像素 / 码率 / H.264）。\n" +
                  "创建方式：Project 右键 → Create → MyVerse XR SDK → Stream Config。\n" +
@@ -40,7 +31,6 @@ namespace MyVerseXRSDK.Streaming
         public StreamConfigAsset streamConfigAsset;
 
         private GameAudioStreamCapture m_GameAudio;
-        private MicrophoneStreamCapture m_Microphone;
 
         private void OnEnable()
         {
@@ -53,21 +43,12 @@ namespace MyVerseXRSDK.Streaming
             {
                 m_GameAudio = new GameAudioStreamCapture(gameAudioListener);
             }
-
-            if (captureMicrophone)
-            {
-                m_Microphone = new MicrophoneStreamCapture(
-                    string.IsNullOrEmpty(micDevice) ? null : micDevice,
-                    micSampleRate);
-            }
         }
 
         private void OnDisable()
         {
             m_GameAudio?.Dispose();
             m_GameAudio = null;
-            m_Microphone?.Dispose();
-            m_Microphone = null;
         }
     }
 }

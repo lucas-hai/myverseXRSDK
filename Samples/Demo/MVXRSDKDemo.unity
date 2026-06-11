@@ -1161,14 +1161,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d4fcec5ece6c92149953dd7adb743137, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  mainCamera: {fileID: 420374102}
   gameAudioListener: {fileID: 420374103}
-  captureMicrophone: 0
-  micSampleRate: 48000
-  micDevice: 
-  directorCameras:
-  - {fileID: 1056337955}
-  - {fileID: 420925679}
   streamConfigAsset: {fileID: 0}
 --- !u!114 &1607555274
 MonoBehaviour:
@@ -1195,7 +1188,7 @@ MonoBehaviour:
   recordFileNamePrefix: mvxrsdk_demo
   recordRealCamera: 0
   recordCameraId: 
-  directorCameraIndex: 0
+  directorCamera: {fileID: 0}
   directorDurationSec: 5
   directorLenses: 1
   autoVerifyOnConnected: 0
@@ -1205,7 +1198,6 @@ MonoBehaviour:
   transactionKey: 116
   recordKey: 114
   directorRealKey: 100
-  directorLocalKey: 108
   simulateLiveStartKey: 107
   simulateLiveStopKey: 115
   hotSwapXROffsetKey: 120

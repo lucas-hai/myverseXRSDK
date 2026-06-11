@@ -29,13 +29,13 @@ namespace MyVerseXRSDK
         public void Initialize(AudioStreamTrack track)
         {
             m_Track = track;
-            m_SampleRate = AudioSettings.outputSampleRate;
-
-            // AudioMixingSystem 内部以 48k 缓存；若 Unity 输出采样率不是 48k，
-            // SetData 时仍按 m_SampleRate 写，会被 WebRTC 内部重采样到协商的 opus 采样率
+            // SetData 声明率必须 = ring 数据的真实采样率（混音工作率），否则 WebRTC 按错误源率
+            // 重采样导致音调/速度失真。工作率 = 设备输出率 = 本回调的消费节奏，
+            // ring 写入/消费流速天然平衡；到 opus 协商采样率的转换由 WebRTC 内部完成
+            m_SampleRate = AudioMixingSystem.MixSampleRate;
             if (m_SampleRate != 48000)
             {
-                MVXRSDKLog.Warning($"AudioStreamFeeder: AudioSettings.outputSampleRate={m_SampleRate} ≠ 48000，依赖 WebRTC 内部重采样");
+                MVXRSDKLog.Info($"AudioStreamFeeder: 工作采样率 {m_SampleRate}Hz（≠48k，PICO 设备输出率），由 WebRTC 内部重采样到 opus");
             }
 
             // 1s 静音 clip + loop 播放，是触发 OnAudioFilterRead 的最轻量手段
