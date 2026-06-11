@@ -20,7 +20,8 @@ MVXRSDK 是一套用于 XR（扩展现实）环境的多人协作开发工具：
 │   └── com.myverse.xrsdk/      ← SDK 包整体放这里
 │       ├── package.json
 │       ├── Runtime/
-│       ├── Tests/
+│       ├── Samples/
+│       ├── Documentation~/
 │       └── ...
 └── ProjectSettings/
 ```
@@ -41,8 +42,8 @@ Unity 会自动识别 `Packages/` 下含 `package.json` 的目录为 local embed
 
 Package Manager 窗口 → 选中 `MyVerse XR SDK` → `Samples` 标签 → `Demo` → `Import` 即可在 `Assets/Samples/` 下获得：
 
-- `MVXRSDKDemo.unity` —— 测试场景，已装配好 XR Rig / 主相机 / 切镜目标相机 / Root 节点 / Floor / Demo 总控 GameObject
-- `MVXRSDKDemo.cs` —— 总控脚本，覆盖全部模块：启动模式（Production/WsDirect）、节点注册（XR Offset / Self / Root）、积分扣除、推流（Rig 装配）、切镜（真链路 + 本地直切）、录屏、全局错误监听、热替换/注销演示
+- `MVXRSDKDemo.unity` —— 测试场景，已装配好 XR Rig（含玩家相机）/ 直播相机 DirectorCamera1/2（拖入总控 `directorCamera` 字段做自动接源）/ Root 节点 / Floor / Demo 总控 GameObject
+- `MVXRSDKDemo.cs` —— 总控脚本，覆盖全部模块：启动模式（Production/WsDirect）、节点注册（XR Offset / Self / Root）、积分扣除、推流（Rig 装配音频 + 配置）、切镜（SendDirectorRequest 自动接源 + Editor 仿真 NotifyLive）、录屏、全局错误监听、热替换/注销演示
 
 打开场景直接 Play；Inspector 的 `MVXRSDKDemo` 字段切 `initMode` + 填 `controlServerAddress` 后按键触发各模块：
 
@@ -50,9 +51,8 @@ Package Manager 窗口 → 选中 `MyVerse XR SDK` → `Samples` 标签 → `Dem
 |---|---|
 | `I` | Init SDK | `U` | UnInit SDK |
 | `T` | 自助积分验证 | `R` | StartRecord |
-| `D` | 真链路切镜（SendDirectorRequest + OnPushStreamStarting → 接源） | `L` | 本地 Debug_SimulateNotifyLive 触发推流 |
-| `K` / `S` | Editor 仿真 NotifyLive 启动/停止（Offline / WsDirect 都能跑） | `X` | 热替换 XR Offset Node |
-| `Y` | 注销 Self Node（演示注销后位姿不上报） | | |
+| `D` | 真链路切镜（SendDirectorRequest 自动接源重载，被选中后自动接 directorCamera） | `X` | 热替换 XR Offset Node |
+| `K` / `S` | Editor 仿真 NotifyLive 启动/停止（Offline / WsDirect 都能跑） | `Y` | 注销 Self Node（演示注销后位姿不上报） |
 
 ### 2.4 功能模块速览
 
@@ -588,7 +588,7 @@ MVXRSDK.Debug_SimulateNotifyLive("192.168.1.100", start: true);
 #endif
 ```
 
-完整推流测试场景参考：`Tests/PlayModeScenes/WsDirectRecordSwitch.unity`。
+完整推流测试场景参考：宿主工程 `Assets/Test/PlayModeScenes/WsDirectRecordSwitch.unity`（仅 dev workspace，不随 UPM 包分发）。
 
 ### 8.8 推流限制与配置
 
@@ -610,7 +610,7 @@ MVXRSDK.Debug_SimulateNotifyLive("192.168.1.100", start: true);
 | Target Architectures（Android） | **ARM64 only**，禁用 ARMv7 | ✓ |
 | Internet Access | **Require** | ✓ `ForceInternetPermission=1` |
 | Optimized Frame Pacing | **关闭**（issue #437：开启时 video PTS 时间戳异常） | 2022.3 默认关闭 |
-| Audio System Sample Rate | 48000Hz 推荐（避免内部重采样） | AudioManager `m_SampleRate=0`（Best latency 自动选） |
+| Audio System Sample Rate | 48000Hz 推荐（避免内部重采样） | AudioManager `m_SampleRate=0`（跟随设备输出率）；SDK 混音按设备输出率工作、`SetData` 按工作率声明，到 Opus 的重采样由 WebRTC 内部完成——非 48k 设备实测可用（PICO 4U 输出 24000） |
 
 **不支持目标平台**：Windows UWP / iOS Simulator / WebGL。
 
@@ -654,8 +654,8 @@ MVXRSDK.Debug_SimulateNotifyLive("192.168.1.100", start: true);
 
 | 字段 | 默认 | 说明 |
 |---|---|---|
-| `Fps` | 30 | 推流帧率上限（同时锁定 sender.maxFramerate） |
-| `StreamMaxLongSide` | 1280 | 推流画面长边像素上限（按比例缩，0 = 不限） |
+| `Fps` | 30 | 推流帧率上限（RT 源 Blit 节流 + sender.maxFramerate） |
+| `StreamMaxLongSide` | 1280 | InternalRT 长边像素（固定 16:9，默认 1280×720；与画面源无关） |
 | `VideoBandwidthKbps` | 3500 | 码率上限（SDP b=AS + sender.maxBitrate） |
 | `VideoMinBitrateKbps` | 1500 | 码率下限（sender.minBitrate，跳过 BWE 慢启动） |
 | `ForceH264` | true | 强制 H.264 编码 |
@@ -690,8 +690,8 @@ StreamConfigAsset (ScriptableObject, Inspector 编辑 4 个视频编码字段)
 var cfg = new StreamConfig
 {
     // === 视频编码 ===
-    Fps                  = 30,       // 推流帧率上限；同时落到 sender.maxFramerate 锁定编码器
-    StreamMaxLongSide    = 1280,     // 推流画面长边像素上限（Rig 按比例缩到 InternalRT，0 = 不限）
+    Fps                  = 30,       // 推流帧率上限；RT 源 Blit 节流 + sender.maxFramerate 锁定编码器
+    StreamMaxLongSide    = 1280,     // InternalRT 长边（固定 16:9 → 1280x720；与画面源无关）
     VideoBandwidthKbps   = 3500,     // 码率上限：SDP b=AS:N + sender.maxBitrate
     VideoMinBitrateKbps  = 1500,     // 码率下限：sender.minBitrate（跳过 BWE 慢启动）
     ForceH264            = true,     // 强制 H.264；局域网 + PICO 推荐 true
@@ -751,16 +751,17 @@ MVXRSDK.SetStreamConfig(new StreamConfig {
 
 #### 8.8.6 运行时修改的注意事项
 
-- **协商期字段**（`Fps` / `StreamMaxLongSide` / `VideoBandwidthKbps` / `VideoMinBitrateKbps` / `ForceH264` / `IceGatheringTimeoutSec`）只在 `WebRTCSystem.Start → NegotiateOffer` 期间读取一次，**推流进行中改不会重建 RT / 触发重协商**——必须 Stop → Start。
+- **协商期字段**（`Fps` / `VideoBandwidthKbps` / `VideoMinBitrateKbps` / `ForceH264` / `IceGatheringTimeoutSec`）只在 `WebRTCSystem.Start → NegotiateOffer` 期间读取一次，推流进行中改不触发重协商——需 Stop → Start。
+- **`StreamMaxLongSide` 例外**：InternalRT 创建后常驻（`Dispose` 才释放），改此字段不会重建 RT——需 **UnInit → Init** 才生效（仅 Stop → Start 不够）。
 - **每次推流读取**字段（`WhipHttpTimeoutSec` / 各 `*RetryDelaysMs` / `DisconnectedSelfHealSec` / `StatsReportIntervalMs`）下一次相应触发即生效。
 - `SetStreamConfig(null)` 等价于恢复全部默认值（`new StreamConfig()`）。
 - 完整字段定义见 [`StreamConfig.cs`](../Runtime/Scripts/Operation/Stream/StreamConfig.cs)。
 
 ------
 
-### 8.9 v3 破坏性变更（切镜化推流重构）
+### 8.9 v3 破坏性变更（推流子系统重构）
 
-从 v2.x 升级到 v3 推流子系统的迁移说明：
+从 v2.x 升级到 v3 推流子系统的迁移说明（含切镜化重构与同批的音频推流变更）：
 
 #### 删除的 API
 
@@ -777,6 +778,13 @@ MVXRSDK.SetStreamConfig(new StreamConfig {
 | `MVXRStreamRig.OnRestored`（事件） | 订阅 `MVXRSDK.OnPushStreamStopped` |
 | `MVXRStreamRig.StreamTexture`（属性） | `MVXRSDK.CurrentStreamUrl` 判会话活跃 |
 | `MVXRStreamRig.IsInDirectorSwitch`（属性） | 业务自行维护状态标志 |
+| `MVXRSDK.PushMicPcm(...)` | 无替代——推流音频仅游戏音一路，语音由语音 SDK 自理（SDK 不碰麦克风设备） |
+| `MicrophoneStreamCapture` | 同上 |
+| `MVXRStreamRig.captureMicrophone` / `micSampleRate` / `micDevice` | 删除，Rig 音频字段仅剩 `gameAudioListener` |
+
+#### 行为变化（非删除）
+
+- `PushGameAudioPcm` 采样率约束从白名单 `{48000, 44100}` 放宽为 **8000–192000 Hz**；SDK 工作采样率改为跟随设备输出率（`AudioSettings.outputSampleRate`，Init 时锁定），等率直通、异率线性重采样——业务直接传 `AudioSettings.outputSampleRate` 即可，见 §8.5
 
 #### 构造函数签名变化
 
@@ -855,9 +863,18 @@ MVXRSDKLog.SetTag("MyGame.SDK");                    // 自定义标签前缀
 - **Q：注册多个根节点时，场景偏移如何应用？**
   A：所有已注册的根节点会同步应用相同的位置偏移与旋转。
 
+- **Q：PICO 4U 推流黑屏 / 编码器异常？**
+  A：Vulkan + WebRTC 在 PICO 4U 上实测不可用，Player Settings 强制 OpenGL ES3（见 §8.8.1 C）。
+
+- **Q：推流音频没声 / 音调失真？**
+  A：v3 起 SDK 工作采样率跟随设备输出率，业务采集回调直接传 `AudioSettings.outputSampleRate` 即可（见 §8.5）；推流音频仅游戏音一路，无麦克风。仍无声时检查 `MVXRStreamRig.gameAudioListener` 是否已拖入 AudioListener。
+
+- **Q：推流中调 `SetStreamSource` 没生效？**
+  A：一相机推流保护——会话活跃且已有源时新源直接丢弃（Warning 日志，不排队不抢占，见 §8.4.5）。先 `ClearStreamSource()` 再接，或等停流。
+
 ------
 
-**文档生成时间**：2026-05-20
+**文档更新时间**：2026-06-11
 **适用版本**：MVXRSDK v2.x（Unreleased，内测中）
 
 详细更新记录请参阅 [CHANGELOG.md](../CHANGELOG.md)（含 v1.x → v2.x Migration Guide）。

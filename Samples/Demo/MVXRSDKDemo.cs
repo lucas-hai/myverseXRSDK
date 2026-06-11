@@ -19,8 +19,9 @@ using UnityEngine;
 /// 10. Editor Debug：Debug_SimulateNotifyLive 在 Editor 内绕过 WS 仿真推流通知（Offline / WsDirect 都能跑）
 ///
 /// 挂法：同 GameObject 上同时挂本组件 + <see cref="MVXRStreamRig"/>。
-/// Inspector 字段：xrOffsetNode / selfNode / rootNodes / streamRig 拖入场景对应节点；
-/// 推流主相机 + 切镜目标相机数组配在 Rig 内。
+/// Inspector 字段：xrOffsetNode / selfNode / rootNodes 拖入场景对应节点；
+/// 直播相机拖入本组件的 directorCamera（SendDirectorRequest 自动接源用）；
+/// Rig 仅配音频源（gameAudioListener）+ StreamConfigAsset，不再持有任何相机。
 /// </summary>
 [RequireComponent(typeof(MVXRStreamRig))]
 public sealed class MVXRSDKDemo : MonoBehaviour
@@ -59,7 +60,7 @@ public sealed class MVXRSDKDemo : MonoBehaviour
     public Transform[] rootNodes;
 
     [Header("推流装配（拖同 GO 上的 MVXRStreamRig）")]
-    [Tooltip("MVXRStreamRig 引用。游戏音 / 麦克风 / StreamConfig 配在 Rig 自己的 Inspector；\n" +
+    [Tooltip("MVXRStreamRig 引用。游戏音 / StreamConfig 配在 Rig 自己的 Inspector；\n" +
              "画面源管理由业务侧直接调 MVXRSDK API（本组件演示 SendDirectorRequest 自动接源）。")]
     public MVXRStreamRig streamRig;
 
@@ -80,11 +81,20 @@ public sealed class MVXRSDKDemo : MonoBehaviour
     [Tooltip("被选中后要推的相机。URP Render Type=Base；enabled 默认 false。")]
     public Camera directorCamera;
 
-    [Tooltip("切镜持续秒数（透传给中控）。")]
+    [Tooltip("机位来源（DirectorRequestOptions.Source，原样透传给中控）：\n" +
+             "- 留空：自动接源重载会自动填 \"unity\"（传了相机即明确本机机位）\n" +
+             "- \"unity\"：本机 Unity 游戏内机位（推哪个相机是本地决策，中控不感知）\n" +
+             "- \"mr\"：请求切回原直播（播控第一视角），此时本机不会被选中接源")]
+    public string directorSource = "";
+
+    [Tooltip("镜头数（透传给中控）：1=单镜头 / 2=双拼 / 3=品字 / 4=2x2。<1 按 1 处理。")]
+    public int directorLenses = 1;
+
+    [Tooltip("切镜持续秒数（透传给中控），必须 > 0；到期由服务端停流，客户端不做本地倒计时。")]
     public int directorDurationSec = 5;
 
-    [Tooltip("镜头数（透传给中控）：1=单镜头 / 2=双拼 / 3=品字 / 4=2x2。仅真链路（D）用得到。")]
-    public int directorLenses = 1;
+    [Tooltip("是否录制这一段切镜画面（DirectorRequestOptions.Record，服务端执行录制）。")]
+    public bool directorRecord = false;
 
     [Header("积分扣除（按 T / ContextMenu）")]
     [Tooltip("自助模式：主动调 TransactionVerification（需中控启动模式 + BaseUrl 非空，否则立即 fail）。\n" +
@@ -320,10 +330,14 @@ public sealed class MVXRSDKDemo : MonoBehaviour
         // 停流自动清；受理结果走 OnDirectorRequestResult
         MVXRSDK.SendDirectorRequest(new DirectorRequestOptions
         {
+            Source      = directorSource,    // 留空时本重载自动填 DirectorSource.Unity
             Lenses      = directorLenses,
             DurationSec = directorDurationSec,
+            Record      = directorRecord,
         }, directorCamera);
-        Debug.Log($"[MVXRSDKDemo] SendDirectorRequest(auto) camera={directorCamera?.name} lenses={directorLenses} duration={directorDurationSec}s");
+        Debug.Log($"[MVXRSDKDemo] SendDirectorRequest(auto) camera={directorCamera?.name} " +
+                  $"source={(string.IsNullOrEmpty(directorSource) ? "(auto→unity)" : directorSource)} " +
+                  $"lenses={directorLenses} duration={directorDurationSec}s record={directorRecord}");
     }
 
     private void OnDirectorSelected(string deviceId, bool isPrimary, int slot, int durationSec)

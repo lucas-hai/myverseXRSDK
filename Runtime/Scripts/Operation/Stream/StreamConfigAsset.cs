@@ -17,18 +17,17 @@ namespace MyVerseXRSDK
     public sealed class StreamConfigAsset : ScriptableObject
     {
         [Header("视频编码")]
-        [Tooltip("推流画面长边像素上限。按原画面比例同比例缩放保持不形变。\n" +
-                 "  PICO 4U 单眼 ~1920x1920 (≈1:1)，1280 → 推流 1280x1280\n" +
-                 "  非 XR 1920x1080 (16:9)，1280 → 推流 1280x720\n" +
+        [Tooltip("推流 InternalRT 长边像素（v3：固定 16:9，与画面源无关）。\n" +
+                 "  默认 1280 → InternalRT 1280x720\n" +
+                 "• 相机源（CameraStreamSource）按 RT 尺寸渲染，比例永远正确\n" +
+                 "• RT 源（RenderTextureStreamSource）Blit 缩放适配，非 16:9 外部 RT 会拉伸\n" +
                  "• 越大画质越好但码率/CPU 占用越高；越小越省但接收端画面糊\n" +
-                 "• 0 = 不限（用源 RT 原始尺寸；PICO 单眼 1920+ 可能撑爆编码器）\n" +
-                 "• 推流进行中改不会重建 RT，需 Stop → Start 才生效\n" +
-                 "• 仅 MVXRStreamRig 路径生效；业务自管 IStreamSource 时此字段被忽略")]
-        [Min(0)]
+                 "• InternalRT 创建后常驻，运行中改不重建——需 UnInit → Init 才生效")]
+        [Min(16)]
         public int StreamMaxLongSide = 1280;
 
         [Tooltip("推流帧率上限（fps）。\n" +
-                 "• 同时写入 sender.maxFramerate，硬约束编码器输出。\n" +
+                 "• RT 源按此节流 Blit；相机源每帧渲染，由 sender.maxFramerate 约束编码输出。\n" +
                  "• 建议 ≤ XR 主循环频率（PICO 4 = 72/90），> 60 时编码器会丢帧。\n" +
                  "• 越低 PTS 步长越大、画面卡顿；越高带宽消耗越大。\n" +
                  "• 默认 30，VR 场景建议 30；2D 录屏可上 60。")]

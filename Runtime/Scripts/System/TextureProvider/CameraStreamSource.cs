@@ -10,10 +10,10 @@ namespace MyVerseXRSDK
     /// 性能：Camera.targetTexture = RT 后，Camera 渲染管线直接输出到该 RT，
     /// 无 Graphics.Blit 中间步骤。72/90Hz 渲染下 GPU 开销 ≈ 0。
     ///
-    /// 业务约定：目标相机平时可以 enabled=false（不上屏、不烧 GPU）；
+    /// 业务约定：直播相机平时可以 enabled=false（不上屏、不烧 GPU）；
     /// Attach 时 SDK 自动强制启用，Detach 时还原回 Attach 前的值——
-    /// 这样切镜目标相机默认不参与游戏渲染，被选中时才独立渲染到推流 RT，
-    /// 屏幕上始终只看到业务主相机（有 targetTexture 的相机不上屏，Unity 规则）。
+    /// 这样直播相机默认不参与游戏渲染，被中控选中（NotifyLive）接源后才渲染到推流 RT，
+    /// 屏幕上始终只看到玩家视角相机（有 targetTexture 的相机不上屏，Unity 规则）。
     ///
     /// Detach 行为：还原 cam.targetTexture 和 cam.enabled 到 Attach 前的值。
     /// </summary>

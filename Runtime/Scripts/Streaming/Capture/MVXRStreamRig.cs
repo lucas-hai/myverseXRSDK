@@ -24,7 +24,7 @@ namespace MyVerseXRSDK.Streaming
         public AudioListener gameAudioListener;
 
         [Header("推流配置 Asset")]
-        [Tooltip("推流视频编码参数 Asset（Fps / 长边像素 / 码率 / H.264）。\n" +
+        [Tooltip("推流视频编码参数 Asset（Fps / InternalRT 长边 / 码率 / H.264）。\n" +
                  "创建方式：Project 右键 → Create → MyVerse XR SDK → Stream Config。\n" +
                  "Rig OnEnable 时自动 Apply 写入 StreamConfig.Active。\n" +
                  "留空时全部走 SDK 默认（Fps=30 / 长边 1280 / 码率 3500 / H.264 强制）。")]

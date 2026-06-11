@@ -1162,7 +1162,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   gameAudioListener: {fileID: 420374103}
-  streamConfigAsset: {fileID: 0}
+  streamConfigAsset: {fileID: 11400000, guid: 65c05f7484f4866498c170069d20aabe, type: 2}
 --- !u!114 &1607555274
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1176,8 +1176,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   initMode: 1
-  deviceId: lzy7
-  controlServerAddress: http://192.168.1.158:7015
+  deviceId: lzy004
+  controlServerAddress: http://192.168.1.59:7015
   initOnStart: 1
   xrOffsetNode: {fileID: 794924890}
   selfNode: {fileID: 420374101}
@@ -1188,9 +1188,11 @@ MonoBehaviour:
   recordFileNamePrefix: mvxrsdk_demo
   recordRealCamera: 0
   recordCameraId: 
-  directorCamera: {fileID: 0}
-  directorDurationSec: 5
+  directorCamera: {fileID: 420925679}
+  directorSource: unity
   directorLenses: 1
+  directorDurationSec: 50
+  directorRecord: 0
   autoVerifyOnConnected: 0
   printStatePeriodSec: 5
   initKey: 105
