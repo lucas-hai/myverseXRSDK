@@ -196,7 +196,9 @@ namespace MyVerseXRSDK
             }
 
             MVXRSDKLog.Info($"PushStreamModule: 停止推流 url={CurrentWhipUrl} reason={reason}");
-            FireDelete();  // fire-and-forget：立即清空 Location，不等 DELETE 完成
+            // ServerStop = 服务端主动停流，mediamtx session 已由服务端清理：
+            // DELETE 仅单次 best-effort 通知，不重试（重试只会刷无意义告警）
+            FireDelete(retryOnFailure: reason != StreamStopReason.ServerStop);
             CleanupSession();
             CurrentWhipUrl = null;
             m_Location = null;
@@ -216,14 +218,15 @@ namespace MyVerseXRSDK
             OnStopped?.Invoke(StreamStopReason.NetworkLost);
         }
 
-        private void FireDelete()
+        private void FireDelete(bool retryOnFailure = true)
         {
             if (string.IsNullOrEmpty(m_Location)) return;
             var whip = m_CurrentWhip ?? m_WhipFactory();
             if (whip == null) return;
             string loc = m_Location;
-            // 协程内置 3 次重试 + 200/204/404 视为成功，主流程无需等待
-            MonoSystem.Start_Coroutine(whip.Delete(loc));
+            // fire-and-forget：协程内 200/204/404 视为成功，主流程无需等待；
+            // retryOnFailure=false（ServerStop）时单次通知不重试
+            MonoSystem.Start_Coroutine(whip.Delete(loc, retryOnFailure));
         }
 
         private void CleanupSession()

@@ -42,7 +42,11 @@ namespace MyVerseXRSDK
     /// 协程化：Post 与 Delete 均返回 IEnumerator，由调用方通过 MonoSystem.Start_Coroutine
     /// 驱动；过程中 yield 等 UnityWebRequest 完成，**不阻塞主线程**。
     ///
-    /// DELETE 内置 3 次重试（间隔 1s / 3s / 8s），200/204/404 视为成功；
+    /// Location：mediamtx 的 201 响应 Location 头是相对路径，Post 内部以请求 URL 为 base
+    /// 解析成绝对 URL 再返回（否则 DELETE 因缺 host 必然连接失败）。
+    ///
+    /// DELETE 默认内置 3 次重试（间隔 1s / 3s / 8s），200/204/404 视为成功；
+    /// retryOnFailure=false（服务端主动停流场景）时单次 best-effort，不重试。
     /// 调用方一般通过 Start_Coroutine 启动 Delete 协程后立刻返回（fire-and-forget），无需等待。
     /// </summary>
     internal class WhipClient
@@ -85,14 +89,35 @@ namespace MyVerseXRSDK
                 yield break;
             }
 
-            onDone?.Invoke(BuildResponse(raw));
+            onDone?.Invoke(BuildResponse(raw, whipUrl));
         }
 
         /// <summary>
-        /// 协程化 WHIP DELETE，内置重试。Caller 一般 fire-and-forget：
+        /// 把 WHIP 响应的 Location 头解析为绝对 URL。mediamtx 返回相对路径（如
+        /// /room/dev/whip/xxx?authToken=...），直接拿去发 DELETE 会因缺 host 连接失败——
+        /// 按 RFC 3986 以请求 URL 为 base 解析；已是绝对 URL 则原样返回。
+        /// </summary>
+        internal static string ResolveLocation(string whipUrl, string location)
+        {
+            if (string.IsNullOrEmpty(location)) return location;
+            if (Uri.TryCreate(location, UriKind.Absolute, out _)) return location;
+            if (Uri.TryCreate(whipUrl, UriKind.Absolute, out var baseUri) &&
+                Uri.TryCreate(baseUri, location, out var resolved))
+            {
+                return resolved.ToString();
+            }
+            // 解析失败原样返回——后续 DELETE 的失败日志会暴露问题，不在这里吞掉
+            return location;
+        }
+
+        /// <summary>
+        /// 协程化 WHIP DELETE。Caller 一般 fire-and-forget：
         /// <c>MonoSystem.Start_Coroutine(whipClient.Delete(loc));</c>
         /// </summary>
-        public IEnumerator Delete(string location)
+        /// <param name="location">WHIP session 绝对 URL（Post 已解析）。</param>
+        /// <param name="retryOnFailure">true（默认）按配置重试；false 单次 best-effort——
+        /// 服务端主动停流（ServerStop）场景 session 已由服务端清理，重试只会刷无意义告警。</param>
+        public IEnumerator Delete(string location, bool retryOnFailure = true)
         {
             if (string.IsNullOrEmpty(location)) yield break;
             // 取 snapshot：协程期间 cfg 被 Apply 也不会影响当前重试节奏
@@ -102,8 +127,9 @@ namespace MyVerseXRSDK
             {
                 delays = new[] { 1000, 3000, 8000 };
             }
+            int attempts = retryOnFailure ? delays.Length : 1;
 
-            for (int attempt = 0; attempt < delays.Length; attempt++)
+            for (int attempt = 0; attempt < attempts; attempt++)
             {
                 HttpResult raw = null;
                 yield return m_Transport.Delete(location, timeoutSec, r => raw = r);
@@ -117,21 +143,28 @@ namespace MyVerseXRSDK
                     yield break;
                 }
 
+                if (!retryOnFailure)
+                {
+                    // 服务端主动停流：失败属预期（session 大概率已被服务端清掉），降 Info 不告警
+                    MVXRSDKLog.Info($"WhipClient.Delete: best-effort 通知未达（不重试，session 由服务端清理）location={location} code={code} msg={raw?.ErrorMsg}");
+                    yield break;
+                }
+
                 MVXRSDKLog.Warning(
-                    $"WhipClient.Delete: 失败 attempt={attempt + 1}/{delays.Length} " +
+                    $"WhipClient.Delete: 失败 attempt={attempt + 1}/{attempts} " +
                     $"location={location} code={code} msg={raw?.ErrorMsg}");
 
                 // 最后一次失败不再等
-                if (attempt < delays.Length - 1)
+                if (attempt < attempts - 1)
                 {
                     yield return new WaitForSeconds(delays[attempt] / 1000f);
                 }
             }
             // 全部重试耗尽 = mediamtx 真正不可达，升 Error；mediamtx 侧需依赖 stream 空闲超时清理
-            MVXRSDKLog.Error($"WhipClient.Delete: {delays.Length} 次重试均失败 location={location}（mediamtx 不可达，依赖空闲超时清理 session）");
+            MVXRSDKLog.Error($"WhipClient.Delete: {attempts} 次重试均失败 location={location}（mediamtx 不可达，依赖空闲超时清理 session）");
         }
 
-        private static WhipResponse BuildResponse(HttpResult raw)
+        private static WhipResponse BuildResponse(HttpResult raw, string whipUrl)
         {
             switch (raw.StatusCode)
             {
@@ -140,7 +173,7 @@ namespace MyVerseXRSDK
                     {
                         Success = true,
                         SdpAnswer = raw.Body,
-                        Location = raw.Location
+                        Location = ResolveLocation(whipUrl, raw.Location)
                     };
                 case 401:
                 case 403:

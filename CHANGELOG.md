@@ -29,6 +29,8 @@
 - `PushGameAudioPcm` 采样率放宽：8000–192000 Hz（原 {48000, 44100} 白名单其余抛 `ArgumentException`）；音频工作采样率改为跟随设备输出率（`AudioSettings.outputSampleRate`，Init 时锁定），输入等率直通、异率线性重采样
 
 ### Fixed
+- WHIP DELETE 必失败：mediamtx 201 响应的 `Location` 头是相对路径，SDK 未拼 base URL 直接发 DELETE（缺 host 连接层失败），重试耗尽后误报"mediamtx 不可达"。现以请求 URL 为 base 按 RFC 3986 解析为绝对 URL（Editor WsDirect 真链路日志实测发现）
+- 服务端主动停流（`NotifyLive start=false` → `ServerStop`）后 WHIP DELETE 不再重试：session 已由服务端清理，改为单次 best-effort 通知，未达降为 Info（原先重试 3 次 + Error 告警）
 - 设备音频输出非 48kHz 时游戏音推流不可用/失真（PICO 4U 实测输出 24000Hz 必现）：
   - Rig 游戏音采集被采样率白名单拒绝，音频线程每个回调抛 `ArgumentException`（游戏音整体推不出去）
   - 混音缓冲固定 48k 重采样与 `AudioStreamFeeder.SetData` 按设备率声明不一致 → 音调/速度失真；且 ring 写入快于消费 → 周期性丢音。现 feeder 声明率恒等于混音工作率
