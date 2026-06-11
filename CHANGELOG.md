@@ -21,6 +21,7 @@
 - `OnPushStreamStarting`：会话开始建立（被选中信号），业务在此接源
 - 推流无源启动（推黑帧等待接源）；一相机推流保护（推流中新 `SetStreamSource` 请求丢弃，Warning 日志）
 - 相机销毁自保护：attach 中相机被销毁自动清源推黑帧 + Warning
+- 接入 `logic.UpdateDeviceOnlineStatus` 协议：登录成功（含重连重登录）上报 online=true；退出房间（UnInit / 房间解散 / 应用退出兜底）上报 online=false
 
 ### Changed
 - InternalRT 固定尺寸（`StreamConfig.StreamMaxLongSide` 按 16:9，默认 1280×720），任意源可热切；`ClearStreamSource` 清黑保留 RT，`Dispose` 才释放

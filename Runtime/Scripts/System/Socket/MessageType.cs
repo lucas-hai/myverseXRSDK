@@ -65,5 +65,12 @@ namespace MyVerseXRSDK
         /// </summary>
         public static string SC_DEVICE_GAME_START = "DeviceGameStartPush";
 
+        /// <summary>
+        /// 上报设备在线状态（CS 请求-应答）：logic.UpdateDeviceOnlineStatus
+        /// payload: UpdateDeviceOnlineStatus.Types.Request { DeviceId, Online }
+        /// 登录成功上报 online=true；退出房间（UnInit / 房间解散 / 应用退出）上报 online=false
+        /// </summary>
+        public static string CS_UPDATE_DEVICE_ONLINE_STATUS = "logic.UpdateDeviceOnlineStatus";
+
     }
 }

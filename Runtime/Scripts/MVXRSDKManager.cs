@@ -22,6 +22,8 @@ namespace MyVerseXRSDK
         }
         private void OnApplicationQuit()
         {
+            // 尽力而为：SendAsync 异步排队，进程退出瞬间可能丢；已 UnInit 时内部守卫直接跳过
+            RoomManager.ReportDeviceOffline();
             SocketSystem.Clear();
         }
 
