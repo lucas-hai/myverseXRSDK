@@ -641,7 +641,7 @@ MVXRSDK.Debug_SimulateNotifyLive("192.168.1.100", start: true);
 
 | 实测 | 现象 | 处置 |
 |---|---|---|
-| **PICO 4U + Vulkan + WebRTC** | 编码器异常 / 帧不出（即使官方矩阵明示 Android Vulkan 支持 MediaCodec） | **强制 OpenGL ES3**——设备/驱动 specific bug，与 webrtc 包本身无关 |
+| **PICO 4U + Vulkan + 读 eye buffer 抓帧（v2 旧链路）** | 播控端画面错乱——FDM 注视点渲染影响 GPU 内存布局，从 multiview Tex2DArray slice 0 CopyTexture / shader Blit 拿到部分填充/错位内容；帧有到达播控端，编码/传输正常（commit aa8ae33，2026-05-20） | v3 画面源为独立相机直渲普通 RT，不读 eye buffer，Vulkan 可用；新代码若必须抓 eye buffer，回退 OpenGL ES3 或写 XR 感知 RenderFeature |
 | **libwebrtc GCC 慢启动** | 默认初始 BWE ~100kbps，前 ~40s 编码 fps 仅 2-30；接收端 ffmpeg 按 PTS 推算时 dup 帧卡死（PA9410 实测 `dup=158760 speed=0.00238x`） | `VideoMinBitrateKbps` 强制下限——详见 8.8.4 BWE 慢启动机制 |
 | **仅局域网部署** | 项目未配 STUN/TURN，跨网段 ICE 失败（`IceConnectionFailed` 4108） | 保持 PICO 与 mediamtx 同子网，避免公网链路 |
 
@@ -863,8 +863,8 @@ MVXRSDKLog.SetTag("MyGame.SDK");                    // 自定义标签前缀
 - **Q：注册多个根节点时，场景偏移如何应用？**
   A：所有已注册的根节点会同步应用相同的位置偏移与旋转。
 
-- **Q：PICO 4U 推流黑屏 / 编码器异常？**
-  A：Vulkan + WebRTC 在 PICO 4U 上实测不可用，Player Settings 强制 OpenGL ES3（见 §8.8.1 C）。
+- **Q：PICO 4U 推流画面错乱 / 黑屏？**
+  A：画面错乱是 v2 时代 Vulkan 下读 eye buffer 抓帧的坑（FDM 注视点渲染所致，见 §8.8.1 C）；v3 推流源为独立相机直渲普通 RT，无此问题，Vulkan 可用。黑屏先查画面源是否已接上——无源时推黑帧是设计行为（§8.2）。
 
 - **Q：推流音频没声 / 音调失真？**
   A：v3 起 SDK 工作采样率跟随设备输出率，业务采集回调直接传 `AudioSettings.outputSampleRate` 即可（见 §8.5）；推流音频仅游戏音一路，无麦克风。仍无声时检查 `MVXRStreamRig.gameAudioListener` 是否已拖入 AudioListener。
