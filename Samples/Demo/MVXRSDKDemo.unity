@@ -1176,8 +1176,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   initMode: 1
-  deviceId: lzy004
-  controlServerAddress: http://192.168.1.59:7015
+  deviceId: bqc1
+  controlServerAddress: http://192.168.1.157:7015
   initOnStart: 1
   xrOffsetNode: {fileID: 794924890}
   selfNode: {fileID: 420374101}
