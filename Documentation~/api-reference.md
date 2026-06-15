@@ -213,9 +213,19 @@ public static void UnRegisterSelfNode()
 
 > **使用注意（动静节点分离）**：根节点偏移只改根节点自身 `Transform`；被标记为 **Static / Batching Static** 的子物体经静态批处理后世界坐标固定，**不随根节点偏移**。建议把动态与静态节点分离，加载时**先 `RegisterRootNode` 完成偏移、再激活静态节点**。场景偏移在正式流程中由中控在开始游戏时下发一次，布店部署期才需手动调整（建议用动态节点作锚点）。详见 [开发指南 §6.2](index.md)。
 
-### 3.4 同房间虚影开关
+### 3.4 同房间虚影开关与显示距离
 
-控制是否为「同房间（本房间）其他玩家」创建场景虚影。SDK 默认只为「非本房间」成员创建虚影；本房间成员的位置推送默认被跳过（实现见 `NetworkTransformManager.cs:103`；facade 开关定义见 `MVXRSDK.NetworkTransform.cs`）。
+控制是否为「同房间（本房间）其他玩家」创建场景虚影，以及同房间虚影的显示距离。
+
+**显示距离规则（重要）**：
+
+| 对象 | 是否显示 | 显示距离 |
+|------|---------|---------|
+| **本机自己** | **一律不显示**（按 `DeviceId == 本机` 过滤，`NetworkTransformManager.cs`） | — |
+| **其他房间虚影** | 显示 | **固定 2m**（`MVXRSDKConfig.NORMAL_DISTANCE`，不受参数影响） |
+| **同房间虚影** | 默认不显示，开关开启后显示 | **外部传参，默认 2m**（见下方 `displayDistanceMeters`） |
+
+> 默认只为「非本房间」成员创建虚影，本房间成员位置推送被跳过（`NetworkTransformManager.cs`）；开关与查询定义见 `MVXRSDK.NetworkTransform.cs`。
 
 #### IsSyncSameRoomAvatar
 
@@ -223,23 +233,33 @@ public static void UnRegisterSelfNode()
 public static bool IsSyncSameRoomAvatar
 ```
 
-一句话：是否同步同房间其他玩家虚影（只读查询，默认 `false`，`MVXRSDK.NetworkTransform.cs:9-10`）。
+一句话：是否同步同房间其他玩家虚影（只读查询，默认 `false`）。
+
+#### SameRoomAvatarDistance
+
+```csharp
+public static float SameRoomAvatarDistance
+```
+
+一句话：同房间虚影当前显示距离（米，只读，默认 `2`）。
 
 #### SetSyncSameRoomAvatar
 
 ```csharp
-public static void SetSyncSameRoomAvatar(bool enable)
+public static void SetSyncSameRoomAvatar(bool enable, float displayDistanceMeters = 2f)
 ```
 
-一句话：开关同房间虚影同步（`MVXRSDK.NetworkTransform.cs:26-29`）。
+一句话：开关同房间虚影同步并设其显示距离。
 
 | 参数 | 类型 | 含义 |
 |------|------|------|
-| `enable` | `bool` | `true` 开启，`false` 关闭。默认 `false` |
+| `enable` | `bool` | `true` 开启，`false` 关闭。默认行为 `false`（不同步） |
+| `displayDistanceMeters` | `float` | 同房间虚影显示距离（米），默认 `2`，`<=0` 回退 2m；**仅在 `enable=true` 时生效**（关闭时忽略，不改写已设值） |
 
 - 返回值：无。抛出异常：无。约束：任何时机皆可调用（Init 前/中/后）。
-- 关键副作用：开启后续收到本房间位置推送即创建虚影（成员静止不发推送时，等其移动后才出现）；关闭立即回收已创建的本房间虚影，不影响非本房间虚影（`MVXRSDK.NetworkTransform.cs:20-22`）。
-- 依赖：虚影外观复用 SDK 内置角色 prefab（`Characters/Prefabs/Role`），且与其他远端虚影一样**依赖已注册 XR 偏移节点**才会落地到场景（`MVXRSDK.NetworkTransform.cs:23-24`）。
+- 关键副作用：开启后续收到本房间位置推送即创建虚影（成员静止不发推送时，等其移动后才出现）；关闭立即回收已创建的本房间虚影，不影响非本房间虚影。
+- 距离生效时机：改距离后，已存在的同房间虚影在**下一次位置推送**时按新距离重新判定（静止成员需等其移动后生效）。
+- 依赖：虚影外观复用 SDK 内置角色 prefab（`Characters/Prefabs/Role`），且与其他远端虚影一样**依赖已注册 XR 偏移节点**才会落地到场景。
 
 ### 3.5 NetworkTransform 组件（SDK 内部管理，了解即可）
 

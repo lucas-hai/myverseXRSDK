@@ -17,6 +17,7 @@ using UnityEngine;
 /// 8. 全局错误监听：OnError 一个订阅接全部失败路径（推流/录屏/Socket/HTTP/积分）
 /// 9. 反初始化：UnInitMVXRSDK 释放全部资源，可二次 Init
 /// 10. Editor Debug：Debug_SimulateNotifyLive 在 Editor 内绕过 WS 仿真推流通知（Offline / WsDirect 都能跑）
+/// 11. 同房间虚影同步：SetSyncSameRoomAvatar 开关，按键切换是否同步同房间其他玩家虚影（默认关）
 ///
 /// 挂法：同 GameObject 上同时挂本组件 + <see cref="MVXRStreamRig"/>。
 /// Inspector 字段：xrOffsetNode / selfNode / rootNodes 拖入场景对应节点；
@@ -96,6 +97,14 @@ public sealed class MVXRSDKDemo : MonoBehaviour
     [Tooltip("是否录制这一段切镜画面（DirectorRequestOptions.Record，服务端执行录制）。")]
     public bool directorRecord = false;
 
+    [Header("同房间虚影同步（按 M 切换）")]
+    [Tooltip("是否同步同房间（本房间）其他玩家虚影。默认 false（不同步）。\n" +
+             "Start 时应用此初始值；运行时按 M 键切换。对应 MVXRSDK.SetSyncSameRoomAvatar / IsSyncSameRoomAvatar。")]
+    public bool syncSameRoomAvatar = false;
+
+    [Tooltip("同房间虚影显示距离（米），默认 2m。注：其他房间虚影固定 2m、本机自己一律不显示。")]
+    public float sameRoomAvatarDistance = 2f;
+
     [Header("积分扣除（按 T / ContextMenu）")]
     [Tooltip("自助模式：主动调 TransactionVerification（需中控启动模式 + BaseUrl 非空，否则立即 fail）。\n" +
              "订阅模式：监听 OnTransactionVerification 等中控触发回调。\n" +
@@ -116,6 +125,8 @@ public sealed class MVXRSDKDemo : MonoBehaviour
     public KeyCode simulateLiveStopKey = KeyCode.S;
     public KeyCode hotSwapXROffsetKey = KeyCode.X;
     public KeyCode unRegisterSelfKey = KeyCode.Y;
+    [Tooltip("切换是否同步同房间其他玩家虚影（MVXRSDK.SetSyncSameRoomAvatar）。")]
+    public KeyCode syncSameRoomAvatarKey = KeyCode.M;
 
     [Header("热替换/注销演示（用作 X / Y 键的目标）")]
     [Tooltip("按 X 时把 XR Offset Node 热替换为这个节点（演示 v2 任意时机注册 + 热替换）。")]
@@ -161,6 +172,9 @@ public sealed class MVXRSDKDemo : MonoBehaviour
 
         // v3：Rig 不再暴露画面事件（OnSwitched/OnRestored/Ready 已移除）
 
+        // 应用同房间虚影同步初始开关 + 显示距离（任意时机可调；Init 前/后均安全）
+        MVXRSDK.SetSyncSameRoomAvatar(syncSameRoomAvatar, sameRoomAvatarDistance);
+
         if (initOnStart) DoInit();
     }
 
@@ -191,6 +205,7 @@ public sealed class MVXRSDKDemo : MonoBehaviour
         if (Input.GetKeyDown(simulateLiveStopKey))   DoSimulateLive(false);
         if (Input.GetKeyDown(hotSwapXROffsetKey))    DoHotSwapXROffset();
         if (Input.GetKeyDown(unRegisterSelfKey))     DoUnRegisterSelf();
+        if (Input.GetKeyDown(syncSameRoomAvatarKey)) DoToggleSyncSameRoomAvatar();
 
         // 状态机周期打印
         if (printStatePeriodSec > 0f && Time.unscaledTime >= m_NextStatePrintTime)
@@ -416,5 +431,18 @@ public sealed class MVXRSDKDemo : MonoBehaviour
         // NetworkFailureHUD / 远近判定 / 障碍物距离检测 全部退化为静默不启用
         MVXRSDK.UnRegisterSelfNode();
         Debug.Log("[MVXRSDKDemo] UnRegisterSelfNode 完成；本机不再上报位姿");
+    }
+
+    // ============================== 同房间虚影同步 ==============================
+
+    [ContextMenu("Toggle Sync Same-Room Avatar")]
+    public void DoToggleSyncSameRoomAvatar()
+    {
+        // 切换是否同步同房间（本房间）其他玩家虚影：默认关，开启后本房间成员位置推送也落地为虚影；
+        // 关闭时 SDK 立即回收已创建的本房间虚影（不影响非本房间虚影）
+        bool next = !MVXRSDK.IsSyncSameRoomAvatar;
+        MVXRSDK.SetSyncSameRoomAvatar(next, sameRoomAvatarDistance);
+        syncSameRoomAvatar = next;   // 同步 Inspector 显示
+        Debug.Log($"[MVXRSDKDemo] SetSyncSameRoomAvatar({next}, {sameRoomAvatarDistance}m) —— 同房间虚影同步{(next ? "已开启" : "已关闭")}");
     }
 }

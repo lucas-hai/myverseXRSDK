@@ -70,6 +70,8 @@ namespace MyVerseXRSDK
         private Vector2 rolePos;
         private Vector2 m_XRPos;
         private float m_NextDistanceCheckTime = 0f;
+        // 该虚影的可见距离阈值（米）：其他房间固定 2m；同房间由外部传参（默认 2m）。创建/同步时由表现层 SetDisplayDistance 设置。
+        private float m_DisplayDistance = MVXRSDKConfig.NORMAL_DISTANCE;
 
 
         void OnUpdate()
@@ -168,7 +170,7 @@ namespace MyVerseXRSDK
             float dx = rolePos.x - m_XRPos.x;
             float dy = rolePos.y - m_XRPos.y;
             float distSqr = dx * dx + dy * dy;
-            float thresholdSqr = MVXRSDKConfig.NORMAL_DISTANCE * MVXRSDKConfig.NORMAL_DISTANCE;
+            float thresholdSqr = m_DisplayDistance * m_DisplayDistance;
             if (distSqr > thresholdSqr)
             {
                 meshRenderer.enabled = false;
@@ -292,6 +294,12 @@ namespace MyVerseXRSDK
             if (messageType == type) return;
             messageType = type;
 
+        }
+
+        /// <summary>设置该虚影的可见距离阈值（米，仅 Receiver 的可见性判定使用）。&lt;=0 回退默认 2m。</summary>
+        internal void SetDisplayDistance(float meters)
+        {
+            m_DisplayDistance = meters > 0f ? meters : MVXRSDKConfig.NORMAL_DISTANCE;
         }
 
 

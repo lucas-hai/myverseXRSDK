@@ -220,8 +220,9 @@ NotInitialized → Initializing → LocalReady → Connecting → Connected
 
 - **本机上报（Reporter）**：`RegisterSelfNode` 注册玩家相机后，SDK 在该节点上自动挂 `NetworkTransform`（Reporter 角色），按 **0.2s 间隔**比对阈值上报位姿 —— 仅 XZ 平面位移超 **0.001m** 或 Y 转角超 **0.5°** 才发，且只在房间已分配时上报。
 - **远端接收（Receiver）**：远端成员位姿经 WS 推送，落入虚影 GO 上的 `NetworkTransform`（Receiver 角色），做位置 Lerp + 旋转 Slerp 平滑插值，并切换 move/idle 动画。
-- **近远 2m 判定**：以本机 Self 节点为参考，虚影与本机 XZ 平面距离 ≤ **2m** 才从对象池创建虚影，> 2m 回收（保留快照可重建）。Self 节点未注册时退化为"全部较近"并打警告。
-- **同房间虚影开关（`SetSyncSameRoomAvatar`，默认 `false`）**：默认**只为"非本房间"成员创建虚影**，本房间成员位置推送被跳过。开启后本房间推送才会创建虚影（成员静止不上报时需等其移动后出现）；关闭时立即回收已创建的本房间虚影（不影响非本房间）。任意时机可调。
+- **显示距离判定**：以本机 Self 节点为参考，虚影与本机 XZ 平面距离在阈值内才从对象池创建虚影，超出则回收（保留快照可重建）。阈值分两种 —— **其他房间虚影固定 2m**；**同房间虚影由外部传参，默认 2m**（见下方开关）。Self 节点未注册时退化为"全部较近"并打警告。
+- **本机自己一律不显示**：无论同房间还是其他房间，SDK 都会按 `DeviceId == 本机` 过滤位置推送，不为自己创建虚影。
+- **同房间虚影开关与距离（`SetSyncSameRoomAvatar(enable, displayDistanceMeters = 2f)`，默认关）**：默认**只为"非本房间"成员创建虚影**，本房间成员位置推送被跳过。开启后本房间推送才会创建虚影（成员静止不上报时需等其移动后出现），其显示距离取 `displayDistanceMeters`（米，默认 2m，`<=0` 回退 2m，仅开启时生效）；关闭时立即回收已创建的本房间虚影（不影响非本房间）。任意时机可调。
 
 > **`NetworkTransform` 组件由 SDK 内部管理**（注册 Self 节点时自动挂 Reporter，远端虚影自动挂 Receiver），业务通常无需直接操作 —— 了解即可。其 `MessageType` 枚举为 `None=0 / Reporter=1 / Receiver=2`，Reporter 只上报不接收、Receiver 只接收不上报，角色互斥。
 

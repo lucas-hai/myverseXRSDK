@@ -80,6 +80,12 @@ namespace MyVerseXRSDK
 
         private void ApplyToScene(RoleSnapshot snap, Transform parent)
         {
+            // 显示距离：同房间虚影用外部可配距离（NetworkTransformManager.SameRoomDistance，默认 2m）；
+            // 其他房间虚影固定 2m（MVXRSDKConfig.NORMAL_DISTANCE）。
+            float displayDist = (snap.RoomId == RoomManager.RoomId)
+                ? NetworkTransformManager.SameRoomDistance
+                : MVXRSDKConfig.NORMAL_DISTANCE;
+
             // Self 参考为空时退化为"全部认为较近"——避免 NRE，但同时记一条日志便于排查
             var selfRef = MVXRSDK.SelfTransform;
             bool isNear = true;
@@ -88,7 +94,7 @@ namespace MyVerseXRSDK
                 Vector2 posXZ = new Vector2(snap.Position.x, snap.Position.z);
                 Vector2 refXZ = new Vector2(selfRef.localPosition.x, selfRef.localPosition.z);
                 float sqrDist = (posXZ - refXZ).sqrMagnitude;
-                isNear = sqrDist <= MVXRSDKConfig.NORMAL_DISTANCE * MVXRSDKConfig.NORMAL_DISTANCE;
+                isNear = sqrDist <= displayDist * displayDist;
             }
             else
             {
@@ -110,7 +116,7 @@ namespace MyVerseXRSDK
                     m_RoleMap[snap.Id] = roleGo;
                 }
                 if (!roleGo.activeSelf) roleGo.SetActive(true);
-                SyncRoleTransform(roleGo, snap.Position, snap.Rotation);
+                SyncRoleTransform(roleGo, snap.Position, snap.Rotation, displayDist);
             }
             else
             {
@@ -123,12 +129,13 @@ namespace MyVerseXRSDK
             }
         }
 
-        private static void SyncRoleTransform(GameObject roleGo, Vector3 position, Vector3 rotEulerAngles)
+        private static void SyncRoleTransform(GameObject roleGo, Vector3 position, Vector3 rotEulerAngles, float displayDistance)
         {
             var nwt = roleGo.GetComponent<NetworkTransform>();
             if (nwt == null) nwt = roleGo.AddComponent<NetworkTransform>();
             // 角色作为接收者：仅接受外部数据，不进行上报
             nwt.SetRole(NetworkTransform.MessageType.Receiver);
+            nwt.SetDisplayDistance(displayDistance);  // 同房间/其他房间显示距离由上层决定
             nwt.SmoothMove(position, rotEulerAngles);
         }
 

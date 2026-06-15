@@ -22,7 +22,7 @@
 - 推流无源启动（推黑帧等待接源）；一相机推流保护（推流中新 `SetStreamSource` 请求丢弃，Warning 日志）
 - 相机销毁自保护：attach 中相机被销毁自动清源推黑帧 + Warning
 - 接入 `logic.UpdateDeviceOnlineStatus` 协议：登录成功（含重连重登录）上报 online=true；退出房间（UnInit / 房间解散 / 应用退出兜底）上报 online=false
-- `MVXRSDK.SetSyncSameRoomAvatar(bool)` / `IsSyncSameRoomAvatar`：开关是否同步"同房间（本房间）其他玩家虚影"，默认 false（不同步）；开启后本房间位置推送也创建虚影，关闭时立即回收已建的本房间虚影且不影响非本房间虚影（`RoleSnapshot` 新增 `RoomId` 维度支撑按房间精确回收）
+- `MVXRSDK.SetSyncSameRoomAvatar(bool enable, float displayDistanceMeters = 2f)` / `IsSyncSameRoomAvatar` / `SameRoomAvatarDistance`：开关是否同步"同房间（本房间）其他玩家虚影"，默认 false（不同步）。虚影显示距离规则：本机自己一律不显示（按 `DeviceId` 过滤）、其他房间虚影固定 2m、同房间虚影显示距离由 `displayDistanceMeters` 外部传参（默认 2m、仅开启时生效）。开启后本房间位置推送创建虚影，关闭立即回收本房间虚影且不影响非本房间虚影（`RoleSnapshot.RoomId` 维度支撑按房间精确回收，`NetworkTransform` 按实例持有显示距离）
 
 ### Changed
 - InternalRT 固定尺寸（`StreamConfig.StreamMaxLongSide` 按 16:9，默认 1280×720），任意源可热切；`ClearStreamSource` 清黑保留 RT，`Dispose` 才释放
