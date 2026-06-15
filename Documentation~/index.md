@@ -61,7 +61,7 @@ Package Manager 窗口 → 选中 `MyVerse XR SDK` → `Samples` 标签 → `Dem
 | **房间** | `MVXRSDK.JoinRoom` / `LeaveRoom` | 进出房间、成员同步 |
 | **空间对齐** | `MVXRSDK.RegisterXROffsetNode` / `RegisterRootNode` / `RegisterSelfNode` | XR Rig、场景根节点、玩家相机偏移 |
 | **障碍物** | `SpaceObstaclesModule` | 实时同步空间障碍 |
-| **网络 Transform** | `NetworkTransform` 组件 | 多端位置同步 |
+| **网络 Transform** | `NetworkTransform` 组件 / `MVXRSDK.SetSyncSameRoomAvatar` | 多端位置同步、同房间虚影同步开关 |
 | **积分扣除** | `MVXRSDK.OnTransactionVerification` / `TransactionVerification` | 中控启动 / 自助验证两种模式 |
 | **推流** | `MVXRSDK.SetStreamSource` + `OnPushStream*` 事件 | WebRTC（WHIP），由播控通过 NotifyLive 触发 |
 | **录屏信令** | `MVXRSDK.StartRecord(StartRecordOptions)` | 游戏主动触发，SDK 转发到服务端 |
@@ -271,6 +271,27 @@ MVXRSDK.UnRegisterRootNode(Transform rootNode);
 ```csharp
 MVXRSDK.UnRegisterAllRootNodes();
 ```
+
+------
+
+### 6.8 同房间虚影同步开关
+
+```csharp
+MVXRSDK.SetSyncSameRoomAvatar(bool enable);   // 设置开关
+bool on = MVXRSDK.IsSyncSameRoomAvatar;        // 查询当前状态
+```
+
+控制是否同步**同房间（本房间）其他玩家虚影**，默认 `false`（不同步）。
+
+| 状态 | 行为 |
+| :--- | :--- |
+| 默认（false） | SDK 只为「非本房间」成员创建虚影；本房间成员的位置推送被跳过 |
+| 开启（true） | 后续收到本房间位置推送即创建虚影（成员静止不上报时，等其移动后出现） |
+| 关闭（true→false） | 立即回收已创建的本房间虚影，**不影响**非本房间虚影 |
+
+- 任意时机皆可调用（Init 前/中/后），重复设置相同值幂等忽略
+- 虚影外观复用内置角色 prefab（`Resources/Characters/Prefabs/Role`）
+- 与其他远端虚影一致：依赖已注册 XR 偏移节点（`RegisterXROffsetNode`）才会落地到场景；近远以 `SelfTransform` 距离判定（`NORMAL_DISTANCE` = 2m）
 
 ------
 

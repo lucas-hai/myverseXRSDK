@@ -9,6 +9,7 @@ namespace MyVerseXRSDK
     {
         public string  Id;
         public string  ModeId;
+        public string  RoomId;   // 该角色所在房间。用于"按房间精确回收"（如关闭同房间虚影同步时只清本房间）
         public Vector3 Position;
         public Vector3 Rotation;
     }
@@ -31,7 +32,7 @@ namespace MyVerseXRSDK
         /// <summary>角色快照被移除时触发（退房间 / 主动移除）。</summary>
         public event Action<string> OnRoleRemoved;
 
-        public void ApplyRole(string id, string modeId, Vector3 position, Vector3 rotation)
+        public void ApplyRole(string id, string modeId, string roomId, Vector3 position, Vector3 rotation)
         {
             if (string.IsNullOrEmpty(id))
             {
@@ -46,6 +47,7 @@ namespace MyVerseXRSDK
             }
             snap.Id       = id;
             snap.ModeId   = modeId;
+            snap.RoomId   = roomId;
             snap.Position = position;
             snap.Rotation = rotation;
 
@@ -57,6 +59,19 @@ namespace MyVerseXRSDK
             if (!m_Snapshots.Remove(id)) return false;
             SafeInvokeId(OnRoleRemoved, id, nameof(OnRoleRemoved));
             return true;
+        }
+
+        /// <summary>移除指定房间的全部角色快照并广播移除。用于关闭"同房间虚影同步"时只清理本房间，不影响其它房间的虚影。</summary>
+        public void RemoveRolesByRoom(string roomId)
+        {
+            if (string.IsNullOrEmpty(roomId)) return;
+            // 先收集再移除，避免遍历过程中修改字典
+            var ids = new List<string>();
+            foreach (var kv in m_Snapshots)
+            {
+                if (kv.Value.RoomId == roomId) ids.Add(kv.Key);
+            }
+            foreach (var id in ids) RemoveRole(id);
         }
 
         /// <summary>清空全部快照并广播移除事件。用于房间解散等场景，让表现层同步释放 GO。</summary>
