@@ -1176,8 +1176,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   initMode: 1
-  deviceId: bqc1
-  controlServerAddress: http://192.168.1.157:7015
+  deviceId: lzy10
+  controlServerAddress: http://192.168.1.158:7015
   initOnStart: 1
   xrOffsetNode: {fileID: 794924890}
   selfNode: {fileID: 420374101}
@@ -1193,6 +1193,8 @@ MonoBehaviour:
   directorLenses: 1
   directorDurationSec: 50
   directorRecord: 0
+  syncSameRoomAvatar: 1
+  sameRoomAvatarDistance: 2
   autoVerifyOnConnected: 0
   printStatePeriodSec: 5
   initKey: 105
@@ -1204,6 +1206,7 @@ MonoBehaviour:
   simulateLiveStopKey: 115
   hotSwapXROffsetKey: 120
   unRegisterSelfKey: 121
+  syncSameRoomAvatarKey: 109
   xrOffsetNodeAlt: {fileID: 702351850}
 --- !u!1 &1811063401
 GameObject:
