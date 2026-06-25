@@ -45,7 +45,7 @@ namespace MyVerseXRSDK
     }
 
     /// <summary>
-    /// 切镜请求参数集，对应 pb DirectorInsert.Types.Request 的 4 个字段。
+    /// 切镜请求参数集，对应 pb DirectorInsert.Types.Request 的 5 个字段。
     /// 与 <see cref="StartRecordOptions"/> 同风格；协议加字段时在此扩展不破坏调用方。
     /// </summary>
     public struct DirectorRequestOptions
@@ -62,6 +62,9 @@ namespace MyVerseXRSDK
 
         /// <summary>是否录制这一段（服务端执行）。</summary>
         public bool Record;
+
+        /// <summary>录制文件名（不含扩展名），仅 Record=true 时有意义；SDK 原样透传不校验。</summary>
+        public string FileName;
     }
 
     // 推流错误码已合并到 MVXRSDKErrorCode（4xxx 段）—— 见 MVXRSDK.cs。

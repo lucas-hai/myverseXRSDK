@@ -280,7 +280,7 @@ MVXRSDK.OnPushStreamFailed   += (code, msg) => Debug.LogError($"推流失败 {(i
         业务在此回调 ClearStreamSource()
 ```
 
-请求参数 `DirectorRequestOptions` 关键字段（完整定义见 [API 文档](api-reference.md)）：`Source`（机位来源 —— `"unity"`=本机 Unity 机位，空 / `"mr"`=原直播，空是合法协议值不做默认填充）、`Lenses`（镜头数 1/2/3/4）、`DurationSec`（本段时长，必须 > 0，到期服务端停流）、`Record`。
+请求参数 `DirectorRequestOptions` 关键字段（完整定义见 [API 文档](api-reference.md)）：`Source`（机位来源 —— `"unity"`=本机 Unity 机位，空 / `"mr"`=原直播，空是合法协议值不做默认填充）、`Lenses`（镜头数 1/2/3/4）、`DurationSec`（本段时长，必须 > 0，到期服务端停流）、`Record`（是否录制本段）、`FileName`（录制文件名，仅 `Record=true` 时有意义）。
 
 > - **不要把 `OnDirectorRequestResult(true)` 当作"我会推流"** —— 它只表示请求被受理。是否被选中以 `NotifyLive(start)`（即 `OnPushStreamStarting`）为准。
 > - **`OnDirectorSelected` 事件仅协议透传**（中控仲裁结果 deviceId/isPrimary/slot/duration），v3 起业务通常无需处理，保留作日志/观测用途。

@@ -439,7 +439,7 @@ public static void SendDirectorRequest(DirectorRequestOptions opts)
 
 | 参数 | 类型 | 含义 |
 |---|---|---|
-| `opts` | `DirectorRequestOptions`（字段见第 7 章） | 切镜请求参数（`Source`/`Lenses`/`DurationSec`/`Record`） |
+| `opts` | `DirectorRequestOptions`（字段见第 7 章） | 切镜请求参数（`Source`/`Lenses`/`DurationSec`/`Record`/`FileName`） |
 
 - **返回值**：无。
 - **异常**：无显式抛出；非法入参/状态通过 `OnDirectorRequestResult(false)` 异步反馈，不抛异常。
@@ -929,7 +929,7 @@ public void Apply()   // StreamConfigAsset.cs:80
 
 ### 7.4 DirectorRequestOptions（切镜请求参数）
 
-`struct`（值类型），切镜请求参数集，对应 pb `DirectorInsert.Types.Request` 的 4 个字段。与 `StartRecordOptions` 同风格，协议加字段时在此扩展不破坏调用方（`StreamDefine.cs:47-65`）。作为 `MVXRSDK.SendDirectorRequest(...)` 的入参。
+`struct`（值类型），切镜请求参数集，对应 pb `DirectorInsert.Types.Request` 的 5 个字段。与 `StartRecordOptions` 同风格，协议加字段时在此扩展不破坏调用方（`StreamDefine.cs:47-67`）。作为 `MVXRSDK.SendDirectorRequest(...)` 的入参。
 
 定义：`public struct DirectorRequestOptions`（`StreamDefine.cs:51`）。
 
@@ -939,19 +939,21 @@ public void Apply()   // StreamConfigAsset.cs:80
 | `Lenses` | `int` | 镜头数：1=单镜头全屏 / 2=双拼 / 3=品字 / 4=2x2 四宫格 | `<1` 时按 1 处理 | `StreamDefine.cs:58` |
 | `DurationSec` | `int` | 这步持续秒数 | 必须 `>0`；到期由服务端停流，客户端不做本地倒计时 | `StreamDefine.cs:61` |
 | `Record` | `bool` | 是否录制这一段（服务端执行） | struct 默认 `false` | `StreamDefine.cs:64` |
+| `FileName` | `string` | 录制文件名（不含扩展名），仅 `Record=true` 时有意义 | struct 默认 `null`，SDK 构造时规整为空串，原样透传不校验 | `StreamDefine.cs:67` |
 
-> 提示：`DirectorRequestOptions` 是 struct，未显式赋值的字段取该类型零值（`Source=null`、数值=0、`Record=false`）。`DurationSec` 必须显式设 >0，`Lenses` 不设则被按 1 处理。
+> 提示：`DirectorRequestOptions` 是 struct，未显式赋值的字段取该类型零值（`Source=null`、数值=0、`Record=false`、`FileName=null`）。`DurationSec` 必须显式设 >0，`Lenses` 不设则被按 1 处理；`FileName` 不设等效不指定录制文件名。
 
 #### 最小调用示例
 
 ```csharp
-// 请求本机 Unity 机位、单镜头全屏、持续 50 秒、录制；传相机走自动接源重载
+// 请求本机 Unity 机位、单镜头全屏、持续 50 秒、录制并命名文件；传相机走自动接源重载
 var opts = new DirectorRequestOptions
 {
     Source      = DirectorSource.Unity, // 或留空由 camera 重载自动填 "unity"
     Lenses      = 1,
     DurationSec = 50,
     Record      = true,
+    FileName    = "battle-round-3", // 仅 Record=true 时有意义，不含扩展名
 };
 MVXRSDK.SendDirectorRequest(opts, myCamera);
 ```

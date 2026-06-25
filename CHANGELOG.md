@@ -6,7 +6,7 @@
 
 ---
 
-## [Unreleased] - 切镜化推流重构
+## [3.0.0] - 2026-06-25 - 切镜化推流重构
 
 ### Breaking Changes
 - `SendDirectorRequest(int, int)` 删除，改为 `SendDirectorRequest(DirectorRequestOptions)` 与自动接源重载 `SendDirectorRequest(DirectorRequestOptions, Camera)`（DirectorInsert 新增 source/record 字段）
@@ -16,7 +16,7 @@
 - 推流不再包含麦克风语音：删除 `MVXRSDK.PushMicPcm`、`MicrophoneStreamCapture`、`MVXRStreamRig` 的 `captureMicrophone`/`micSampleRate`/`micDevice` 字段；`AudioMixingSystem` 去掉 mic 一路（推流音频仅游戏音）
 
 ### Added
-- `DirectorSource` 常量（`"unity"`=本机 Unity 游戏内机位；空/`"mr"`=原直播）与 `DirectorRequestOptions`（Source/Lenses/DurationSec/Record 四字段）
+- `DirectorSource` 常量（`"unity"`=本机 Unity 游戏内机位；空/`"mr"`=原直播）与 `DirectorRequestOptions`（Source/Lenses/DurationSec/Record/FileName 五字段；`FileName` 录制文件名，仅 `Record=true` 时有意义，SDK 原样透传不校验）
 - `OnDirectorRequestResult`：DirectorInsert 受理结果（受理 ≠ 被选中，被选中以 NotifyLive 为准，即 `OnPushStreamStarting`）
 - `OnPushStreamStarting`：会话开始建立（被选中信号），业务在此接源
 - 推流无源启动（推黑帧等待接源）；一相机推流保护（推流中新 `SetStreamSource` 请求丢弃，Warning 日志）

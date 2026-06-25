@@ -108,17 +108,17 @@ public static partial class LogicReflection {
           "YW1TZXJ2ZXJJcBgBIAEoCRINCgVzdGFydBgCIAEoCBIQCghkZXZpY2VJZBgD",
           "IAEoCSJkCgxEZXZpY2VSZXBvcnQaNwoHUmVxdWVzdBIKCgJvcBgBIAEoCRIQ",
           "CghkZXZpY2VJZBgCIAEoCRIOCgZyb29tSWQYAyABKAkaGwoIUmVzcG9uc2US",
-          "DwoHc3VjY2VzcxgBIAEoCCJ9Cg5EaXJlY3Rvckluc2VydBpOCgdSZXF1ZXN0",
-          "Eg4KBmxlbnNlcxgBIAEoBRITCgtkdXJhdGlvblNlYxgCIAEoBRIOCgZzb3Vy",
-          "Y2UYAyABKAkSDgoGcmVjb3JkGAQgASgIGhsKCFJlc3BvbnNlEg8KB3N1Y2Nl",
-          "c3MYASABKAgiWgoQRGlyZWN0b3JTZWxlY3RlZBIQCghkZXZpY2VJZBgBIAEo",
-          "CRIRCglpc1ByaW1hcnkYAiABKAgSDAoEc2xvdBgDIAEoBRITCgtkdXJhdGlv",
-          "blNlYxgEIAEoBSImChJEaXJlY3RvckRlc2VsZWN0ZWQSEAoIZGV2aWNlSWQY",
-          "ASABKAkilQEKC1N0YXJ0UmVjb3JkGmkKB1JlcXVlc3QSEgoKcmVhbENhbWVy",
-          "YRgBIAEoCBIQCghjYW1lcmFJZBgCIAEoCRIQCghkdXJhdGlvbhgDIAEoBRIQ",
-          "CghmaWxlTmFtZRgEIAEoCRIUCgxwaWNvRGV2aWNlSWQYBSABKAkaGwoIUmVz",
-          "cG9uc2USDwoHc3VjY2VzcxgBIAEoCEIlWiMuL2xvZ2ljL2dlbmVyYXRlZC9s",
-          "b2dpY19wYjtsb2dpY19wYmIGcHJvdG8z"));
+          "DwoHc3VjY2VzcxgBIAEoCCKPAQoORGlyZWN0b3JJbnNlcnQaYAoHUmVxdWVz",
+          "dBIOCgZsZW5zZXMYASABKAUSEwoLZHVyYXRpb25TZWMYAiABKAUSDgoGc291",
+          "cmNlGAMgASgJEg4KBnJlY29yZBgEIAEoCBIQCghmaWxlTmFtZRgFIAEoCRob",
+          "CghSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIIloKEERpcmVjdG9yU2VsZWN0",
+          "ZWQSEAoIZGV2aWNlSWQYASABKAkSEQoJaXNQcmltYXJ5GAIgASgIEgwKBHNs",
+          "b3QYAyABKAUSEwoLZHVyYXRpb25TZWMYBCABKAUiJgoSRGlyZWN0b3JEZXNl",
+          "bGVjdGVkEhAKCGRldmljZUlkGAEgASgJIpUBCgtTdGFydFJlY29yZBppCgdS",
+          "ZXF1ZXN0EhIKCnJlYWxDYW1lcmEYASABKAgSEAoIY2FtZXJhSWQYAiABKAkS",
+          "EAoIZHVyYXRpb24YAyABKAUSEAoIZmlsZU5hbWUYBCABKAkSFAoMcGljb0Rl",
+          "dmljZUlkGAUgASgJGhsKCFJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAhCJVoj",
+          "Li9sb2dpYy9nZW5lcmF0ZWQvbG9naWNfcGI7bG9naWNfcGJiBnByb3RvMw=="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
@@ -170,7 +170,7 @@ public static partial class LogicReflection {
           new pbr::GeneratedClrTypeInfo(typeof(global::NotifyLive), global::NotifyLive.Parser, new[]{ "StreamServerIp", "Start", "DeviceId" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::DeviceReport), global::DeviceReport.Parser, null, null, null, null, new pbr::GeneratedClrTypeInfo[] { new pbr::GeneratedClrTypeInfo(typeof(global::DeviceReport.Types.Request), global::DeviceReport.Types.Request.Parser, new[]{ "Op", "DeviceId", "RoomId" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::DeviceReport.Types.Response), global::DeviceReport.Types.Response.Parser, new[]{ "Success" }, null, null, null, null)}),
-          new pbr::GeneratedClrTypeInfo(typeof(global::DirectorInsert), global::DirectorInsert.Parser, null, null, null, null, new pbr::GeneratedClrTypeInfo[] { new pbr::GeneratedClrTypeInfo(typeof(global::DirectorInsert.Types.Request), global::DirectorInsert.Types.Request.Parser, new[]{ "Lenses", "DurationSec", "Source", "Record" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::DirectorInsert), global::DirectorInsert.Parser, null, null, null, null, new pbr::GeneratedClrTypeInfo[] { new pbr::GeneratedClrTypeInfo(typeof(global::DirectorInsert.Types.Request), global::DirectorInsert.Types.Request.Parser, new[]{ "Lenses", "DurationSec", "Source", "Record", "FileName" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::DirectorInsert.Types.Response), global::DirectorInsert.Types.Response.Parser, new[]{ "Success" }, null, null, null, null)}),
           new pbr::GeneratedClrTypeInfo(typeof(global::DirectorSelected), global::DirectorSelected.Parser, new[]{ "DeviceId", "IsPrimary", "Slot", "DurationSec" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::DirectorDeselected), global::DirectorDeselected.Parser, new[]{ "DeviceId" }, null, null, null, null),
@@ -11042,6 +11042,7 @@ public sealed partial class DirectorInsert : pb::IMessage<DirectorInsert> {
         durationSec_ = other.durationSec_;
         source_ = other.source_;
         record_ = other.record_;
+        fileName_ = other.fileName_;
         _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
       }
 
@@ -11106,6 +11107,20 @@ public sealed partial class DirectorInsert : pb::IMessage<DirectorInsert> {
         }
       }
 
+      /// <summary>Field number for the "fileName" field.</summary>
+      public const int FileNameFieldNumber = 5;
+      private string fileName_ = "";
+      /// <summary>
+      /// 录制文件名称 (record=true 时可用, 不含扩展名)
+      /// </summary>
+      [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+      public string FileName {
+        get { return fileName_; }
+        set {
+          fileName_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+        }
+      }
+
       [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
       public override bool Equals(object other) {
         return Equals(other as Request);
@@ -11123,6 +11138,7 @@ public sealed partial class DirectorInsert : pb::IMessage<DirectorInsert> {
         if (DurationSec != other.DurationSec) return false;
         if (Source != other.Source) return false;
         if (Record != other.Record) return false;
+        if (FileName != other.FileName) return false;
         return Equals(_unknownFields, other._unknownFields);
       }
 
@@ -11133,6 +11149,7 @@ public sealed partial class DirectorInsert : pb::IMessage<DirectorInsert> {
         if (DurationSec != 0) hash ^= DurationSec.GetHashCode();
         if (Source.Length != 0) hash ^= Source.GetHashCode();
         if (Record != false) hash ^= Record.GetHashCode();
+        if (FileName.Length != 0) hash ^= FileName.GetHashCode();
         if (_unknownFields != null) {
           hash ^= _unknownFields.GetHashCode();
         }
@@ -11162,6 +11179,10 @@ public sealed partial class DirectorInsert : pb::IMessage<DirectorInsert> {
           output.WriteRawTag(32);
           output.WriteBool(Record);
         }
+        if (FileName.Length != 0) {
+          output.WriteRawTag(42);
+          output.WriteString(FileName);
+        }
         if (_unknownFields != null) {
           _unknownFields.WriteTo(output);
         }
@@ -11181,6 +11202,9 @@ public sealed partial class DirectorInsert : pb::IMessage<DirectorInsert> {
         }
         if (Record != false) {
           size += 1 + 1;
+        }
+        if (FileName.Length != 0) {
+          size += 1 + pb::CodedOutputStream.ComputeStringSize(FileName);
         }
         if (_unknownFields != null) {
           size += _unknownFields.CalculateSize();
@@ -11204,6 +11228,9 @@ public sealed partial class DirectorInsert : pb::IMessage<DirectorInsert> {
         }
         if (other.Record != false) {
           Record = other.Record;
+        }
+        if (other.FileName.Length != 0) {
+          FileName = other.FileName;
         }
         _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
       }
@@ -11230,6 +11257,10 @@ public sealed partial class DirectorInsert : pb::IMessage<DirectorInsert> {
             }
             case 32: {
               Record = input.ReadBool();
+              break;
+            }
+            case 42: {
+              FileName = input.ReadString();
               break;
             }
           }

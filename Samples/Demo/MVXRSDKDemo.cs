@@ -97,6 +97,9 @@ public sealed class MVXRSDKDemo : MonoBehaviour
     [Tooltip("是否录制这一段切镜画面（DirectorRequestOptions.Record，服务端执行录制）。")]
     public bool directorRecord = false;
 
+    [Tooltip("录制文件名（DirectorRequestOptions.FileName，不含扩展名），仅 directorRecord=true 时有意义。")]
+    public string directorFileName = string.Empty;
+
     [Header("同房间虚影同步（按 M 切换）")]
     [Tooltip("是否同步同房间（本房间）其他玩家虚影。默认 false（不同步）。\n" +
              "Start 时应用此初始值；运行时按 M 键切换。对应 MVXRSDK.SetSyncSameRoomAvatar / IsSyncSameRoomAvatar。")]
@@ -349,10 +352,11 @@ public sealed class MVXRSDKDemo : MonoBehaviour
             Lenses      = directorLenses,
             DurationSec = directorDurationSec,
             Record      = directorRecord,
+            FileName    = directorFileName,  // 仅 Record=true 时有意义
         }, directorCamera);
         Debug.Log($"[MVXRSDKDemo] SendDirectorRequest(auto) camera={directorCamera?.name} " +
                   $"source={(string.IsNullOrEmpty(directorSource) ? "(auto→unity)" : directorSource)} " +
-                  $"lenses={directorLenses} duration={directorDurationSec}s record={directorRecord}");
+                  $"lenses={directorLenses} duration={directorDurationSec}s record={directorRecord} fileName={directorFileName}");
     }
 
     private void OnDirectorSelected(string deviceId, bool isPrimary, int slot, int durationSec)

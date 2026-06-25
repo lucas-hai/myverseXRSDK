@@ -257,22 +257,23 @@ namespace MyVerseXRSDK
             // 新请求覆盖旧 pending（含 null：纯请求重载会清掉上一次的自动接源意图）
             s_PendingAutoCamera = autoAttachCamera;
 
-            var req = BuildDirectorInsertRequest(source, lenses, opts.DurationSec, opts.Record);
+            var req = BuildDirectorInsertRequest(source, lenses, opts.DurationSec, opts.Record, opts.FileName);
             SocketSystem.SendMessage(MessageType.CS_DIRECTOR_INSERT, req.ToByteString(),
                 (code, buf) => HandleDirectorInsertResponse(code, buf));
-            MVXRSDKLog.Info($"StreamManager: 发 DirectorInsert source={source} lenses={lenses} duration={opts.DurationSec} record={opts.Record} autoAttach={(autoAttachCamera != null ? autoAttachCamera.name : "无")}");
+            MVXRSDKLog.Info($"StreamManager: 发 DirectorInsert source={source} lenses={lenses} duration={opts.DurationSec} record={opts.Record} fileName={opts.FileName} autoAttach={(autoAttachCamera != null ? autoAttachCamera.name : "无")}");
         }
 
-        /// <summary>构造 pb 请求（纯函数，单测入口）。</summary>
+        /// <summary>构造 pb 请求（纯函数，单测入口）。fileName 仅 record=true 时有意义，SDK 原样透传。</summary>
         internal static global::DirectorInsert.Types.Request BuildDirectorInsertRequest(
-            string source, int lenses, int durationSec, bool record)
+            string source, int lenses, int durationSec, bool record, string fileName = "")
         {
             return new global::DirectorInsert.Types.Request
             {
                 Source = source ?? string.Empty,
                 Lenses = lenses,
                 DurationSec = durationSec,
-                Record = record
+                Record = record,
+                FileName = fileName ?? string.Empty
             };
         }
 
