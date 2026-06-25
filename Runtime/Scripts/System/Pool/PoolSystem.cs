@@ -10,7 +10,7 @@ namespace MyVerseXRSDK
     /// <summary>
     /// 对象池系统
     /// </summary>
-    public static class PoolSystem
+    internal static class PoolSystem
     {
         #region 对象池系统数据及静态构造方法
         /// <summary>

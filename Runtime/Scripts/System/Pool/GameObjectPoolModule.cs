@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace MyVerseXRSDK
 {
-    public class GameObjectPoolModule
+    internal class GameObjectPoolModule
     {
         #region GameObjectPoolModule持有的数据及初始化方法
         // 根节点

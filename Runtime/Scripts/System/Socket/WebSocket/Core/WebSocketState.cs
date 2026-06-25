@@ -9,7 +9,7 @@ namespace MyVerseXRSDK
     /// <see href="http://www.w3.org/TR/websockets/#dom-websocket-readystate">
     /// The WebSocket API</see>.
     /// </remarks>
-    public enum WebSocketState : ushort
+    internal enum WebSocketState : ushort
     {
         /// <summary>
         /// Equivalent to numeric value 0. Indicates that the connection has not

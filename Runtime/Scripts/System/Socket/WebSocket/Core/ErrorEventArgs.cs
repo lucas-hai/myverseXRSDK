@@ -18,7 +18,7 @@ namespace MyVerseXRSDK
     ///   the <see cref="Exception"/> property.
     ///   </para>
     /// </remarks>
-    public class ErrorEventArgs : EventArgs
+    internal class ErrorEventArgs : EventArgs
     {
         #region Public Constructors
 

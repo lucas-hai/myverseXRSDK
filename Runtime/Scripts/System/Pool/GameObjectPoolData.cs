@@ -6,7 +6,7 @@ namespace MyVerseXRSDK
     /// <summary>
     /// GameObject对象池数据
     /// </summary>
-    public class GameObjectPoolData
+    internal class GameObjectPoolData
     {
         #region GameObjectPoolData持有的数据及初始化方法
         // 这一层物体的 父节点

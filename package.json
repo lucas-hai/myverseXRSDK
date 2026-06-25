@@ -1,6 +1,6 @@
 {
   "name": "com.myverse.xrsdk",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "displayName": "MyVerse XR SDK",
   "description": "MyVerse 多人 XR 协作 SDK：房间同步、空间对齐、WebRTC 推流、导播切换",
   "unity": "2022.3",

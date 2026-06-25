@@ -10,7 +10,7 @@ namespace MyVerseXRSDK
 {
     public delegate void MessageCallBack(int errorCode, byte[] buffer);
 
-    public class MessageSendData
+    internal class MessageSendData
     {
         public int Index;
         public string MessageType;
@@ -19,14 +19,14 @@ namespace MyVerseXRSDK
         public float SendTime;
     }
 
-    public class MessageReciveData
+    internal class MessageReciveData
     {
         public string MessageType;
         public MessageCallBack CallBack;
         public bool IsLog;
     }
 
-    public class SocketModule
+    internal class SocketModule
     {
         /// <summary>请求-应答超时时 MessageCallBack 返回的 errorCode。订阅方据此区分超时与协议错误。</summary>
         public const int RequestTimeoutCode = -999;

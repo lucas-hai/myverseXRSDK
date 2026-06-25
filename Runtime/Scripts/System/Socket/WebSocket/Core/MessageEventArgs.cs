@@ -6,7 +6,7 @@ namespace MyVerseXRSDK
     /// <summary>
     /// Provides data for the <see cref="IWebSocket.MessageReceived"/> event.
     /// </summary>
-    public class MessageEventArgs : EventArgs
+    internal class MessageEventArgs : EventArgs
     {
         private byte[] _rawData;
         private string _data;

@@ -6,6 +6,16 @@
 
 ---
 
+## [3.0.2] - 2026-06-25
+
+### Fixed
+- 包导入到（从其复制源码的）主工程时全量 GUID 冲突、类型整体编译失败：`Pool` / `Http` / `Socket` / `Res` 等脚本当初是从主工程**复制**进包、沿用了相同 `.meta` GUID，与主工程残留的同名脚本撞 GUID，Unity 静默丢弃包内副本 → 整个 `MVXRSDK.asmdef` 缺类型、报一片 `CS0234/CS0246`。给这批脚本（`GameObjectPoolModule`/`GameObjectPoolData`/`ObjectPoolModule`/`ObjectPoolData`/`HttpCallBackArgs`/`HttpSystem`/`ResSystem`/`SocketSystem`）的 `.meta` 换发全新唯一 GUID
+
+### Changed
+- **边界收缩**：把不面向业务的内部基础设施类型从 `public` 收为 `internal`（兑现 3.0.0 文档已预告的收敛）——`PoolSystem` 及对象池族（`GameObjectPoolModule`/`GameObjectPoolData`/`ObjectPoolModule`/`ObjectPoolData`）、`SocketSystem`、`SocketModule`/`MessageSendData`/`MessageReciveData`、内置 WebSocket 协议栈（`IWebSocket`/`WebSocket`/`*EventArgs`/`CloseStatusCode`/`Opcode`/`WebSocketState`）、`GameAudioStreamCapture`。业务连接状态查询统一用 `MVXRSDK.IsConnected`（测试经 `InternalsVisibleTo` 不受影响；`Samples/Demo` 不引用这些类型）
+
+---
+
 ## [3.0.1] - 2026-06-25
 
 ### Fixed

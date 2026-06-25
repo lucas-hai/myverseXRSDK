@@ -1417,16 +1417,18 @@ SDK 内部日志类 `MVXRSDKLog`（`Runtime/Scripts/System/Log/MVXRSDKLog.cs:22`
 
 > 说明：早期文档曾示例业务调用 `MVXRSDKLog.SetMinLevel(...)`，与当前可见性（`internal`）不符，已更正。若业务确需运行时调节 SDK 日志级别，需由 SDK 将 `MVXRSDKLog` 改为 `public`（目前为已知限制）。
 
-## 11. 附录：非业务面 public 类型
+## 11. 附录：非业务面类型
 
-以下类型在源码中为 `public`（按 UPM 分发会进入消费者 IntelliSense），但属 SDK 内部基础设施或第三方 / 生成代码，**不是业务面 API，请勿在业务代码中使用**，后续可能收敛为 `internal`：
+以下 SDK 内部基础设施类型**已收敛为 `internal`**（不再进入消费者 IntelliSense），业务代码无法也无需引用：
 
-- 基础设施 System：`SocketSystem`、`PoolSystem` 及其对象池数据 / 模块类
+- 基础设施 System：`SocketSystem`、`PoolSystem` 及其对象池数据 / 模块类（`GameObjectPoolModule` / `GameObjectPoolData` / `ObjectPoolModule` / `ObjectPoolData`）
 - Socket 实现：`SocketModule` / `MessageSendData` / `MessageReciveData`
 - 内置 WebSocket 协议栈：`IWebSocket` / `WebSocket` / `*EventArgs` / `CloseStatusCode` / `Opcode` / `WebSocketState`
-- Protobuf 生成产物：`Logic.cs` / `Ws.cs` 中的全部消息类型（请勿手改，改 `.proto` 后重新生成）
+- 采集实现：`GameAudioStreamCapture`（音频请通过 `MVXRStreamRig` 配置）
 
-> 连接状态查询请用 `MVXRSDK.IsConnected` / `MVXRSDK.State`，不要使用内部的 `SocketSystem`。
+仅 Protobuf 生成产物（`Logic.cs` / `Ws.cs` 中的全部消息类型）仍为 `public`（生成代码不手改）——它们虽进入 IntelliSense，但同样**不是业务面 API，请勿在业务代码中使用**。
+
+> 连接状态查询请用 `MVXRSDK.IsConnected` / `MVXRSDK.State`。
 
 ---
 

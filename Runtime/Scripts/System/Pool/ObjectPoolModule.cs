@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace MyVerseXRSDK
 {
-    public class ObjectPoolModule
+    internal class ObjectPoolModule
     {
         #region ObjectPoolModule持有的数据及初始化方法
         /// <summary>

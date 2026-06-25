@@ -12,7 +12,7 @@ namespace MyVerseXRSDK.Streaming
     /// 采样率跟随设备输出（AudioSettings.outputSampleRate，PICO 4U 实测 24000），
     /// 与混音工作率一致直通；SDK 接受 8k–192k。
     /// </summary>
-    public sealed class GameAudioStreamCapture : IDisposable
+    internal sealed class GameAudioStreamCapture : IDisposable
     {
         private Tap m_Tap;
         private bool m_Disposed;

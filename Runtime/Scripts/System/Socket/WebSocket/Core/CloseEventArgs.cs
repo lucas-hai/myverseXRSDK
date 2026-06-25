@@ -14,7 +14,7 @@ namespace MyVerseXRSDK
   ///   the <see cref="Code"/> or <see cref="Reason"/> property.
   ///   </para>
   /// </remarks>
-  public class CloseEventArgs : EventArgs
+  internal class CloseEventArgs : EventArgs
   {
     #region Public Constructors
 

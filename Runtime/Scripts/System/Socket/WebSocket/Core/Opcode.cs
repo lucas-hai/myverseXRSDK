@@ -8,7 +8,7 @@ namespace MyVerseXRSDK
     /// <see href="http://tools.ietf.org/html/rfc6455#section-5.2">
     /// Section 5.2</see> of RFC 6455.
     /// </remarks>
-    public enum Opcode : byte
+    internal enum Opcode : byte
     {
         /// <summary>
         /// Equivalent to numeric value 1. Indicates text frame.

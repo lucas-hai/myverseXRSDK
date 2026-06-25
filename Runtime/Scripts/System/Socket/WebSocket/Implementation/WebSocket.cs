@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace MyVerseXRSDK
 {
-    public class WebSocket : IWebSocket
+    internal class WebSocket : IWebSocket
     {
         public string Address { get; private set; }
         public string[] SubProtocols { get; private set; }

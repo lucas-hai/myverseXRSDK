@@ -7,7 +7,7 @@ namespace MyVerseXRSDK
 
 {
 
-    public static class SocketSystem
+    internal static class SocketSystem
     {
         private static SocketModule m_Server;
 

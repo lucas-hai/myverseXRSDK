@@ -13,7 +13,7 @@ namespace MyVerseXRSDK
     /// <para>可以发送和接收消息，</para>
     /// <para>通过注册消息回调，来处理接收到的消息。</para>
     /// </summary>
-    public interface IWebSocket
+    internal interface IWebSocket
     {
         /// <summary>
         /// Establishes a connection asynchronously.

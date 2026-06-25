@@ -451,4 +451,4 @@ UnInit 是"反向 + 对称 + 幂等"的：卸载顺序与装配顺序相反、Sy
 
 ## 附录 · 非业务面 public 类型
 
-下列类型在程序集中虽为 public，但属基础设施 / 协议栈，**不面向业务**：`SocketSystem`、`PoolSystem`、内置 WebSocket 协议栈、PB 生成产物（`Logic.cs` / `Ws.cs`）等。**请勿在业务代码中使用** —— 它们后续可能收敛为 internal。
+下列基础设施 / 协议栈类型**已收敛为 internal**，业务无法也无需引用：`SocketSystem`、`PoolSystem`、Socket / 内置 WebSocket 协议栈、`GameAudioStreamCapture` 等。仅 PB 生成产物（`Logic.cs` / `Ws.cs`）仍为 public（生成代码不手改），但同样不面向业务，**请勿在业务代码中使用**。

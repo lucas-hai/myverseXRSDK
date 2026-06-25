@@ -14,7 +14,7 @@ namespace MyVerseXRSDK
     ///   closing handshake by an endpoint.
     ///   </para>
     /// </remarks>
-    public enum CloseStatusCode : ushort
+    internal enum CloseStatusCode : ushort
     {
         Unknown = 65534,
         /// <summary>

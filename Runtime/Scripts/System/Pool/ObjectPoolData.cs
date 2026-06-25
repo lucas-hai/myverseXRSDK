@@ -5,7 +5,7 @@ namespace MyVerseXRSDK
     /// <summary>
     /// 普通类 对象 对象池数据
     /// </summary>
-    public class ObjectPoolData
+    internal class ObjectPoolData
     {
         #region ObjectPoolData持有的数据及初始化方法
         // 对象容器
