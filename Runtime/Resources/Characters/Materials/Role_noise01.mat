@@ -8,7 +8,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: Role_noise01
-  m_Shader: {fileID: 4800000, guid: ff4f8ab7da95ca34781111978f67f0f5, type: 3}
+  m_Shader: {fileID: 4800000, guid: 188275f745bec4468062dd6f7d7c692e, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
@@ -56,7 +56,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _NoiseTex:
-        m_Texture: {fileID: 2800000, guid: 300507124b08f514faf46eea0fb27cf2, type: 3}
+        m_Texture: {fileID: 2800000, guid: bbc524e1be538a08ee793e4e4f2e9336, type: 3}
         m_Scale: {x: 10, y: 10}
         m_Offset: {x: 0, y: 0}
     - _OcclusionMap:

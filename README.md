@@ -11,15 +11,15 @@
 Window → Package Manager → 左上角 `+` → **Add package from git URL**，填入：
 
 ```
-https://github.com/lucas-hai/myverseXRSDK.git#v3.0.2
+https://github.com/lucas-hai/myverseXRSDK.git#v3.0.3
 ```
 
-`#v3.0.2` 是版本 tag，建议始终带上以锁定版本；省略则拉默认分支最新提交。
+`#v3.0.3` 是版本 tag，建议始终带上以锁定版本；省略则拉默认分支最新提交。
 
 也可写进 `Packages/manifest.json`：
 
 ```json
-"com.myverse.xrsdk": "https://github.com/lucas-hai/myverseXRSDK.git#v3.0.2"
+"com.myverse.xrsdk": "https://github.com/lucas-hai/myverseXRSDK.git#v3.0.3"
 ```
 
 ### 依赖说明

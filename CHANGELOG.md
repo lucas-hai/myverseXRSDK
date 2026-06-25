@@ -6,6 +6,13 @@
 
 ---
 
+## [3.0.3] - 2026-06-25
+
+### Fixed
+- 主工程导入时一批**资源**（角色模型 / 障碍 / shader / pbLib DLL）GUID 冲突被 Unity 忽略：这些资源同样是从主工程复制进包、沿用了相同 `.meta` GUID。其中角色 / 障碍 prefab 被忽略会让 SDK `Resources.LoadAsync<GameObject>`（`ResSystem.cs`）**运行时拿到 null → 虚影 / 障碍显示失败**（DLL/shader 仅 Warning）。修复：给包内 `Runtime/Resources` + `Runtime/Plugins` 全部资源换发全新唯一 GUID，并同步 remap 包内引用链（prefab→mat→texture/shader/fbx，零残留校验），让包资源 GUID 与主工程彻底独立、互不影响
+
+---
+
 ## [3.0.2] - 2026-06-25
 
 ### Fixed

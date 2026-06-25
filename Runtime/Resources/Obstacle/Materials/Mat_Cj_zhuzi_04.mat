@@ -8,7 +8,7 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: Mat_Cj_zhuzi_04
-  m_Shader: {fileID: 4800000, guid: 9221ee4b1b45ca54495d4a6b5c0fdda0, type: 3}
+  m_Shader: {fileID: 4800000, guid: d9193c0e8c970edc430c454cec4fcabe, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
@@ -56,7 +56,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _Mask2_Texture:
-        m_Texture: {fileID: 2800000, guid: e0017e5dd8bb7884fad8a3d4f981d302, type: 3}
+        m_Texture: {fileID: 2800000, guid: 11c165a508e828947a91e5f8a891ac25, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _Mask3_Texture:
@@ -64,7 +64,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _Mask_Texture:
-        m_Texture: {fileID: 2800000, guid: d1eaeea3927546c438ffe3be6cdb3901, type: 3}
+        m_Texture: {fileID: 2800000, guid: 8214bf605c35cfb19212fed19fab8028, type: 3}
         m_Scale: {x: 0.7, y: 1}
         m_Offset: {x: 0.15, y: 0}
     - _MetallicGlossMap:

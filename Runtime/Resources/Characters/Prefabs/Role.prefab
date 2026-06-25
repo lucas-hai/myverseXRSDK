@@ -752,8 +752,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 92251b678825bd74faad307d84d914d4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  moveClip: {fileID: 7400000, guid: d80d8ffe9e69166439beed60a6475469, type: 2}
-  idleClip: {fileID: 7400000, guid: ff90ce18234d58b4e986be85b47b39d1, type: 2}
+  moveClip: {fileID: 7400000, guid: 611ba8ee9a1e9481873a9b1bc920fc53, type: 2}
+  idleClip: {fileID: 7400000, guid: 581259f9d3ff6d46245d729616a7d314, type: 2}
 --- !u!1 &2555701505744878809
 GameObject:
   m_ObjectHideFlags: 0
@@ -1762,7 +1762,7 @@ SkinnedMeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: e5493f2fccb84f9448da9b49ca37670e, type: 2}
+  - {fileID: 2100000, guid: bf335d230732d8c77b9fb6814005609b, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -1787,7 +1787,7 @@ SkinnedMeshRenderer:
   m_Quality: 0
   m_UpdateWhenOffscreen: 0
   m_SkinnedMotionVectors: 1
-  m_Mesh: {fileID: -1545623494530662788, guid: 7a9e9cd6c4778d24abc26259d8e734ba, type: 3}
+  m_Mesh: {fileID: -1545623494530662788, guid: 7f40bee34192508b90b734ee37be3e8b, type: 3}
   m_Bones:
   - {fileID: 8605490608684682648}
   - {fileID: 4317968929501659863}
