@@ -6,6 +6,13 @@
 
 ---
 
+## [3.0.1] - 2026-06-25
+
+### Fixed
+- 包导入到第三方工程编译失败（一片 `CS0234`/`CS0246`，遍布 Pool/Http/Event/Mono）：`GameObjectPoolModule.cs` / `PoolSystem.cs` 残留未使用的 `using Unity.Collections;`，而 `package.json` 未声明 `com.unity.collections`（本机靠 URP 14 传递依赖才让该命名空间可见）。第三方工程该命名空间不可见时，这两个文件 `using` 解析失败 → 文件编译失败 → 连带整个 `MVXRSDK.asmdef` 程序集垮掉，程序集内所有类型（含没有该 using 的模块）全部报"不存在"。删除冗余 using，SDK 对 `com.unity.collections` 零依赖
+
+---
+
 ## [3.0.0] - 2026-06-25 - 切镜化推流重构
 
 ### Breaking Changes
