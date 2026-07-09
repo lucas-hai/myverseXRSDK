@@ -6,6 +6,16 @@
 
 ---
 
+## [Unreleased]
+
+### Added
+- SDK 验证面板：未验证时打开工程自动弹出（每编辑器会话一次），菜单 `Tools/MyVerse XRSDK/SDK 验证`；凭据存 `MVXRSDKSettingsAsset`（随项目入 git，团队共享，验证一次全员生效）。区域规格拉取与地块上传未验证时拦截并引导验证
+- 本地区域地块编辑器：Hierarchy 右键"生成本地区域地块编辑器"，从远端规格列表选 id 创建条目（本地已有 id 置灰）、SceneView 底框拖拽/数值编辑、保存需上传远端成功（失败不落盘、可重试）。数据资产 `LocalRegionDataList`（运行时契约路径 `Resources/MVXRSDK/LocalRegionData`）
+- 远端接口占位：SDK 验证 / 规格列表 / 地块上传均为 Mock 实现（切换点 `SdkAuthServices` / `RegionToolServices`），HTTP 接口就绪后替换并**删除全部【临时假数据】标记的 Mock**
+- 包内首个 Editor 程序集 `MVXRSDK.Editor`
+
+---
+
 ## [3.0.3] - 2026-06-25
 
 ### Fixed
