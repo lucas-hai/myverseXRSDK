@@ -38,6 +38,12 @@ namespace MyVerseXRSDK
         public static string CS_QUERY_GAME_SCENE_INFO = "logic.QueryGameSceneInfo";
 
         /// <summary>
+        /// 服务器主动推送 区域信息全量快照（SC 推送）：RegionInfoPush { regionInfo, gameInfo }
+        /// 登录响应 Login.Response.regionInfo(13) 携带首帧，之后变更时推送；未接入 Region 的房间无有效数据
+        /// </summary>
+        public static string SC_REGION_INFO_PUSH = "RegionInfoPush";
+
+        /// <summary>
         /// 播控通知推流（SC 推送）：NotifyLivePush { StreamServerIp, Start, DeviceId }
         /// </summary>
         public static string SC_NOTIFY_LIVE = "NotifyLivePush";

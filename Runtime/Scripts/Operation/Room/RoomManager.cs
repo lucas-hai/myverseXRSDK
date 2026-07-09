@@ -150,6 +150,13 @@ namespace MyVerseXRSDK
             MVXRSDK.SetRoomAllocationStatus(RoomAllocationStatus.Allocated);
             MVXRSDK.SetState(MVXRSDKState.Connected);
             EventSystem.EventTrigger(MVXRSDKEventType.LOGIN_SUCCESS);
+
+            // Region 体系：登录响应携带区域全量快照首帧（未接入 Region 的房间该字段为空，
+            // 根节点不偏移——旧 GameScenePush 偏移功能已废弃，Region 是唯一驱动源）
+            if (loginRsp.RegionInfo != null)
+            {
+                SpaceManager.ApplyRegionSnapshot(loginRsp.RegionInfo);
+            }
             MVXRSDKLog.Info(string.Format("加入房间成功，所在房间人数{0}", loginRsp.Devices.Count));
             ReportDeviceOnline();
         }

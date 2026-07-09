@@ -50,14 +50,27 @@ namespace MyVerseXRSDK
         private static void AddEvent()
         {
             SocketSystem.RegisterMessage(MessageType.SC_GAME_SCENE_PUSH, OnScenePush);
+            SocketSystem.RegisterMessage(MessageType.SC_REGION_INFO_PUSH, OnRegionPush);
             EventSystem.AddEventListener(MVXRSDKEventType.LOGIN_SUCCESS, OnLoginSuccess);
         }
 
         private static void RemoveEvent()
         {
             SocketSystem.CancelMessage(MessageType.SC_GAME_SCENE_PUSH);
+            SocketSystem.CancelMessage(MessageType.SC_REGION_INFO_PUSH);
             EventSystem.RemoveEventListener(MVXRSDKEventType.LOGIN_SUCCESS, OnLoginSuccess);
         }
+
+        /// <summary>
+        /// 应用 Region 全量快照。登录链路（RoomManager 转发 Login.Response.regionInfo）与
+        /// WS 推送（OnRegionPush）共用入口；push/regionInfo 无效时由 Store 忽略并告警。
+        /// </summary>
+        internal static void ApplyRegionSnapshot(RegionInfoPush push)
+        {
+            if (!s_Initialized) return;
+            m_Store.ApplyRegionPush(push);
+        }
+
 
         private static void OnLoginSuccess()
         {
@@ -79,6 +92,14 @@ namespace MyVerseXRSDK
             if (errorCode != 0) { MVXRSDKLog.Error($"GameScenePush errorCode:{errorCode}"); return; }
             if (!SocketSystem.TryParse<GameScenePush>(buffer, out var push, "Space.GameScenePush")) return;
             m_Store.ApplyPush(push);
+        }
+
+        private static void OnRegionPush(int errorCode, byte[] buffer)
+        {
+            if (!s_Initialized) return;
+            if (errorCode != 0) { MVXRSDKLog.Error($"RegionInfoPush errorCode:{errorCode}"); return; }
+            if (!SocketSystem.TryParse<RegionInfoPush>(buffer, out var push, "Space.RegionInfoPush")) return;
+            m_Store.ApplyRegionPush(push);
         }
     }
 }
