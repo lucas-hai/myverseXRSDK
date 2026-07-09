@@ -194,7 +194,19 @@ NotInitialized → Initializing → LocalReady → Connecting → Connected
 空间数据由 WS 推送驱动（登录后先拉一次全量，之后实时推），缓存在 SDK 内部 Store，与 GameObject 解耦。涉及两类业务可注册的节点：
 
 - **XR 偏移节点（`RegisterXROffsetNode`）**：作为所有障碍物 GO 的挂载父节点 —— 障碍物坐标都在 XR 偏移节点本地空间下。不变量：有障碍物 ⟹ XR 偏移节点已注册。
-- **场景根节点（`RegisterRootNode`，支持多个）**：与 XR 偏移节点**相互独立**。服务端推送 `offset`/`rotation` 时，SDK 遍历所有已注册根节点写入 `localPosition` / `localEulerAngles`。注册时机晚于推送也安全 —— 新注册节点会立即回放一次最新缓存偏移。
+- **场景根节点（`RegisterRootNode`，支持多个）**：与 XR 偏移节点**相互独立**。SDK 遍历所有已注册根节点写入 `localPosition` / `localEulerAngles`。注册时机晚于推送也安全 —— 新注册节点会立即按当前生效数据源回放一次。
+
+#### 场景根节点驱动（Region 体系，唯一驱动源）
+
+- 登录响应 `regionInfo` 携带首帧 + 运行中 `RegionInfoPush` 变更推送（全量快照覆盖）。SDK 用远端实际长宽生成临时 id（**取绝对值后截断取整**，不四舍五入，按远端 tagId 形态拼 `宽X长`、大写 X，如 `len:12.35, width:6.18` → `6X12`）匹配本地地块条目（地块编辑器产出，见 §12.2），按区域公式驱动根节点：
+  ```
+  基础位置 = 区域center − 地块position + 区域offset          （逐分量）
+  基础旋转 = 区域rotation − 地块rotation + 区域offsetRotation （欧拉角逐分量）
+  最终位姿 = 基础 + gameOffset / gameOffsetRotation           （游戏偏移为相对基础的总偏移，幂等）
+  ```
+  匹配不到地块 / 未提供 `Resources/MVXRSDK/LocalRegionData` 资产时根节点保持原位并告警。仅登录首帧或长宽变化时重查地块，纯游戏偏移变更复用缓存。
+- **旧 `GameScenePush` 的 Offset/Rotation 根节点偏移功能已废弃**：新版客户端不解析（后端为老版本客户端保留字段）；未接入 Region 的房间（`regionInfo` 为空）根节点不偏移。障碍物同步（SceneData）不受影响，注册接口 `RegisterRootNode` 系列不变。
+- Offline 模式无网络阶段，Region 驱动不生效。
 
 **障碍物**按服务端列表与本地 diff 实时增删改（新增实例化、消失回收、变更则原地更新或重建），分椭圆 / 矩形两类，走对象池。每个障碍物可选距离检测：靠近玩家才显示。
 
@@ -453,22 +465,24 @@ UnInit 是"反向 + 对称 + 幂等"的：卸载顺序与装配顺序相反、Sy
 
 ### 12.1 SDK 验证
 
-Editor 工具链的远端能力（区域规格列表拉取、地块数据上传）需要 appid 与验证密钥：
+Editor 工具链的远端能力（区域规格列表拉取、地块数据上传）需要 appId 与 AccessToken（在开发者平台生成的长期 API 令牌）：
 
 1. 打开工程时若未验证会自动弹出验证面板（每个编辑器会话最多提示一次）；也可从菜单 Tools → MyVerse XRSDK → SDK 验证打开。
-2. 输入 appid 与验证密钥，点"验证"。通过后凭据保存在 `MVXRSDKSettingsAsset`（默认 `Assets/MVXRSDK/MVXRSDKSettings.asset`，随项目入 git，团队共享，验证一次全员生效）。
+2. 填写服务器地址（默认联调环境）、appId 与 AccessToken，点"验证"。SDK 会调开发者平台接口校验令牌有效性（无效/过期/已轮换会给出对应提示）。通过后保存在 `MVXRSDKSettingsAsset`（默认 `Assets/MVXRSDK/MVXRSDKSettings.asset`，随项目入 git，团队共享，验证一次全员生效）。
 3. 未验证时相关远端功能会被拦截并引导打开本面板。
+
+注意：AccessToken 在开发者平台重新生成后旧令牌立即失效（一个开发者同时仅一枚有效）；后续接口若报 `[10006] AccessToken 已失效`，请重新验证并更新令牌。appId 归属校验发生在上传地块时（`[10007]`）。
 
 ### 12.2 本地区域地块编辑器
 
-用于制作"本地区域数据列表"资产；运行时区域对齐按远端下发长宽生成 id（如 `12x6`）匹配本地条目（运行时链路随本版本系列接入，见 CHANGELOG）。
+用于制作"本地区域数据列表"资产；运行时区域对齐按远端下发长宽生成临时 id（tagId 形态 `宽X长`，如 `6X12`）匹配本地条目（运行时链路随本版本系列接入，见 CHANGELOG）。
 
 使用步骤：
 1. 先完成 SDK 验证（见 12.1）——创建条目与保存上传需要。
 2. Hierarchy 右键 → MyVerse XRSDK → 生成本地区域地块编辑器（对象 tag=EditorOnly，不会进包）。
 3. Inspector 指定或"新建"配置文件——**必须位于任一 Resources 根下的 `MVXRSDK/LocalRegionData.asset`**（运行时固定路径加载，放错位置工具会给警告）。
 4. 点"创建新条目"从远端规格列表选 id（本地已有的 id 置灰）；SceneView 拖拽底框调整位置/旋转，或在面板直接输入数值。
-5. 点"保存"：数据先上传远端，成功后才写入本地资产；失败会报错且不保存，可修改后重试。
+5. 点"保存"：数据先上传远端（`POST /api/region/block`），成功后才写入本地资产；失败会报错且不保存，可修改后重试。注意后端当前为追加插入，同一 id 重复保存会在服务端累积多条记录。
 6. 删除条目仅删本地，不同步远端。
 
 注意：地片建议尽量放在原点附近、保持零旋转——区域对齐公式为逐分量算术，地片带旋转且偏离原点时不做刚体修正。

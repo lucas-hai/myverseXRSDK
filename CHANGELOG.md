@@ -11,8 +11,17 @@
 ### Added
 - SDK 验证面板：未验证时打开工程自动弹出（每编辑器会话一次），菜单 `Tools/MyVerse XRSDK/SDK 验证`；凭据存 `MVXRSDKSettingsAsset`（随项目入 git，团队共享，验证一次全员生效）。区域规格拉取与地块上传未验证时拦截并引导验证
 - 本地区域地块编辑器：Hierarchy 右键"生成本地区域地块编辑器"，从远端规格列表选 id 创建条目（本地已有 id 置灰）、SceneView 底框拖拽/数值编辑、保存需上传远端成功（失败不落盘、可重试）。数据资产 `LocalRegionDataList`（运行时契约路径 `Resources/MVXRSDK/LocalRegionData`）
-- 远端接口占位：SDK 验证 / 规格列表 / 地块上传均为 Mock 实现（切换点 `SdkAuthServices` / `RegionToolServices`），HTTP 接口就绪后替换并**删除全部【临时假数据】标记的 Mock**
 - 包内首个 Editor 程序集 `MVXRSDK.Editor`
+- **Region 区域对齐运行时链路**：登录响应 `Login.Response.regionInfo(13)` 首帧 + `RegionInfoPush` 变更推送（全量快照）；远端实际长宽取**绝对值截断取整**（不四舍五入）按远端 tagId 形态（`宽X长`、大写 X，如 `6X12`）生成临时 id 匹配本地地块条目，区域公式（逐分量：center−地块position+offset+gameOffset / rotation−地块rotation+offsetRotation+gameOffsetRotation）驱动场景根节点
+- **接入开发者平台真实接口**（联调环境 `http://192.168.1.220:7888`，服务地址存 `MVXRSDKSettingsAsset.serverUrl`）：SDK 验证 `POST /api/auth/accessToken/verify`（`HttpAccessTokenVerifier`）、区域规格列表 `GET /api/region/list`（`HttpRegionSpecSource`，tagId→id / height→len / width→width）、地块上传 `POST /api/region/block`（`HttpRegionDataUploader`）。Editor 侧 HTTP 统一走 `EditorHttp`（UnityWebRequest + `EditorApplication.update` 异步，不阻塞主线程）
+
+### Changed
+- SDK 验证模型定稿为 **appId + AccessToken**（开发者平台生成的长期 API 令牌，"验证密钥"概念作废）：`MVXRSDKSettingsAsset.secretKey` 更名 `accessToken`（`FormerlySerializedAs` 平滑迁移）；验证面板新增服务器地址栏
+- 地块 id 契约对齐远端 tagId：`RegionIdUtil.MakeRuntimeId` 由 `长x宽`（如 `12x6`）改为 `宽X长` 大写（如 `6X12`）；`TryParseId` 同步换序并兼容大小写 x；删除已无调用方的 `MakeId`/`FormatSize`（去尾零规则作废）。**既有本地地块资产的旧格式 id 需重建**
+
+### Removed
+- **删除全部【临时假数据】Mock**（后端接口定稿）：`MockCredentialVerifier` / `MockRegionSpecSource` / `MockRegionDataUploader`（连同"模拟上传失败"调试菜单）及配套单测
+- **旧 `GameScenePush` 根节点偏移功能废弃**：Offset/Rotation 字段客户端不再解析（后端为老版本客户端保留），Region 成为场景根节点唯一驱动源；未接入 Region 的房间根节点不偏移。障碍物同步（SceneData）与 `RegisterRootNode` 系列注册接口不变
 
 ---
 
