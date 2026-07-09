@@ -42,5 +42,32 @@ namespace MyVerseXRSDK.Editor
                 return settings != null && settings.verified;
             }
         }
+
+        /// <summary>
+        /// 取远端接口调用上下文（服务地址/appId/AccessToken）。未验证或凭据缺失返回 false 并给出原因，
+        /// 供规格拉取/上传等受保护接口在发请求前统一拦截。
+        /// </summary>
+        public static bool TryGetApiContext(out string serverUrl, out string appId, out string accessToken, out string error)
+        {
+            serverUrl = null;
+            appId = null;
+            accessToken = null;
+            var settings = FindSettings();
+            if (settings == null || !settings.verified)
+            {
+                error = "尚未完成 SDK 验证，请先通过 Tools/MyVerse XRSDK/SDK 验证";
+                return false;
+            }
+            if (string.IsNullOrWhiteSpace(settings.appId) || string.IsNullOrWhiteSpace(settings.accessToken))
+            {
+                error = "SDK 设置中的 appId 或 AccessToken 为空，请重新验证";
+                return false;
+            }
+            serverUrl = settings.ResolveServerUrl();
+            appId = settings.appId.Trim();
+            accessToken = settings.accessToken.Trim();
+            error = null;
+            return true;
+        }
     }
 }
