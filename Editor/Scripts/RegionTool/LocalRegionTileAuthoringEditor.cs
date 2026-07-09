@@ -7,23 +7,71 @@ namespace MyVerseXRSDK.Editor
     [CustomEditor(typeof(LocalRegionTileAuthoring))]
     public sealed class LocalRegionTileAuthoringEditor : UnityEditor.Editor
     {
+        private const int EntriesPerPage = 5;   // 条目滚动列表一页显示的条数，超出滚动
+
         private string m_Search = "";
+        private bool m_FetchingSpecs;                                          // 规格列表拉取在途（按钮置灰防重入）
+        private System.Collections.Generic.List<RegionSpec> m_PendingSpecs;    // 异步拉回、待在 OnGUI 内弹出的规格
+        private bool m_Uploading;                                              // 地块上传在途（冻结全部交互）
+        private Vector2 m_EntryListScroll;
 
         private LocalRegionTileAuthoring Target => (LocalRegionTileAuthoring)target;
 
         public override void OnInspectorGUI()
         {
-            DrawDataListRow();
-            if (Target.dataList == null)
+            // 上传在途：冻结全部交互（防重复保存/切换条目/删除导致回调写错行），完成后解冻
+            if (m_Uploading)
+                EditorGUILayout.HelpBox("正在上传地块数据…", MessageType.Info);
+            using (new EditorGUI.DisabledScope(m_Uploading))
             {
-                EditorGUILayout.HelpBox("请指定或新建本地区域数据列表文件", MessageType.Info);
-                return;
+                DrawDataListRow();
+                DrawAlwaysShowToggle();
+                if (Target.dataList == null)
+                {
+                    EditorGUILayout.HelpBox("请指定或新建本地区域数据列表文件", MessageType.Info);
+                    return;
+                }
+                DrawAssetPathWarning();
+                DrawToolbar();
+                // 异步拉回的规格列表转到 OnGUI 内弹菜单：GenericMenu.ShowAsContext 依赖
+                // Event.current，在 HTTP 回调（EditorApplication.update）里直接调会静默失效
+                if (m_PendingSpecs != null && Event.current.type == EventType.Layout)
+                {
+                    var specs = m_PendingSpecs;
+                    m_PendingSpecs = null;
+                    ShowSpecMenu(specs);
+                }
+                DrawEntryList();
+                // 防御：编辑中的已有条目下标失效（删除/Undo/外部改动）→ 退出编辑态，不再显示编辑区
+                if (Target.isEditing && !Target.isNewEntry &&
+                    (Target.editingIndex < 0 || Target.editingIndex >= Target.dataList.entries.Count))
+                {
+                    Target.isEditing = false;
+                    Target.editingIndex = -1;
+                    Target.hasUnsavedChanges = false;
+                    SceneView.RepaintAll();
+                }
+                if (Target.isEditing)
+                    DrawEditPanel();
             }
-            DrawAssetPathWarning();
-            DrawToolbar();
-            DrawEntryList();
-            if (Target.isEditing)
-                DrawEditPanel();
+        }
+
+        // 删除条目后同步编辑态：删的是正在编辑的条目 → 退出编辑；删的在其前面 → 下标前移对齐
+        private void OnEntryDeleted(int deletedIndex)
+        {
+            if (!Target.isEditing || Target.isNewEntry) return;
+            Undo.RecordObject(Target, "删除地块条目");
+            if (Target.editingIndex == deletedIndex)
+            {
+                Target.isEditing = false;
+                Target.editingIndex = -1;
+                Target.hasUnsavedChanges = false;
+                SceneView.RepaintAll();
+            }
+            else if (Target.editingIndex > deletedIndex)
+            {
+                Target.editingIndex--;
+            }
         }
 
         // ------ 编辑态：工作副本模型，保存门禁见 Task 8 ------
@@ -44,8 +92,13 @@ namespace MyVerseXRSDK.Editor
         private void DrawEditPanel()
         {
             var wc = Target.workingCopy;
-            EditorGUILayout.Space(6f);
-            EditorGUILayout.LabelField(Target.isNewEntry ? $"正在编辑（新建）: {wc.id}" : $"正在编辑: {wc.id}",
+            // 编辑区域：与列表区域分离的独立区块（分隔线 + 盒式背景 + 标题）
+            EditorGUILayout.Space(8f);
+            var divider = EditorGUILayout.GetControlRect(false, 2f);
+            EditorGUI.DrawRect(divider, new Color(0.5f, 0.5f, 0.5f, 1f));
+            EditorGUILayout.Space(2f);
+            EditorGUILayout.BeginVertical("HelpBox");
+            EditorGUILayout.LabelField(Target.isNewEntry ? $"编辑区域（新建条目）: {wc.id}" : $"编辑区域: {wc.id}",
                                        EditorStyles.boldLabel);
             EditorGUI.BeginChangeCheck();
             var len = EditorGUILayout.FloatField("长（米，本地Z轴）", wc.len);
@@ -69,6 +122,7 @@ namespace MyVerseXRSDK.Editor
             if (GUILayout.Button("取消"))
                 CancelEditing();
             EditorGUILayout.EndHorizontal();
+            EditorGUILayout.EndVertical();
         }
 
         // ------ 保存门禁：上传成功是落盘前置条件（失败不落盘，工作副本保留可重试）------
@@ -76,27 +130,67 @@ namespace MyVerseXRSDK.Editor
         private void SaveWorkingCopy()
         {
             var snapshot = Target.workingCopy.Clone(); // 上传与落盘用同一份快照，防止回调期间被继续编辑
+            // 捕获写入上下文：上传期间 UI 已冻结，但 Inspector 可能被关闭/切换选中对象，
+            // 回调不能再依赖 Target 的编辑态
+            var dataList = Target.dataList;
+            bool isNewEntry = Target.isNewEntry;
+            int editingIndex = Target.editingIndex;
+
+            m_Uploading = true;
+            Repaint();
             RegionToolServices.Uploader.Upload(snapshot,
                 onDone: () =>
                 {
-                    Undo.RecordObject(Target.dataList, "保存地块条目");
-                    if (Target.isNewEntry)
-                        Target.dataList.entries.Add(snapshot);
-                    else
-                        Target.dataList.entries[Target.editingIndex] = snapshot;
-                    EditorUtility.SetDirty(Target.dataList);
-                    AssetDatabase.SaveAssets();
+                    // 门禁兑现：上传已成功，即使 Inspector 已关闭也要落盘（用捕获的写入目标）
+                    bool saved = false;
+                    if (dataList != null)
+                    {
+                        Undo.RecordObject(dataList, "保存地块条目");
+                        if (isNewEntry)
+                        {
+                            dataList.entries.Add(snapshot);
+                            saved = true;
+                        }
+                        else if (editingIndex >= 0 && editingIndex < dataList.entries.Count)
+                        {
+                            dataList.entries[editingIndex] = snapshot;
+                            saved = true;
+                        }
+                        if (saved)
+                        {
+                            EditorUtility.SetDirty(dataList);
+                            AssetDatabase.SaveAssets();
+                        }
+                    }
+                    if (!saved)
+                    {
+                        Debug.LogWarning($"[MVXRSDK] 地块 {snapshot.id} 已上传成功，但本地写入目标已失效（配置文件被删/条目下标失效），未落盘");
+                    }
 
-                    Undo.RecordObject(Target, "结束编辑地块");
-                    Target.isEditing = false;
-                    Target.isNewEntry = false;
-                    Target.editingIndex = -1;
-                    Target.hasUnsavedChanges = false;
-                    SceneView.RepaintAll();
-                    Repaint();
+                    if (this != null)   // Inspector 仍存活：结束编辑态并解冻
+                    {
+                        m_Uploading = false;
+                        Undo.RecordObject(Target, "结束编辑地块");
+                        Target.isEditing = false;
+                        Target.isNewEntry = false;
+                        Target.editingIndex = -1;
+                        Target.hasUnsavedChanges = false;
+                        SceneView.RepaintAll();
+                        Repaint();
+                    }
+                    if (saved)
+                        EditorUtility.DisplayDialog("保存成功", $"地块 {snapshot.id} 已上传远端并保存到本地。", "确定");
                 },
-                onError: error => EditorUtility.DisplayDialog("上传失败",
-                    $"{error}\n\n数据未保存，可修改后重试。", "确定"));
+                onError: error =>
+                {
+                    if (this != null)
+                    {
+                        m_Uploading = false;
+                        Repaint();
+                    }
+                    EditorUtility.DisplayDialog("上传失败",
+                        $"{error}\n\n数据未保存，可修改后重试。", "确定");
+                });
         }
 
         // 有未保存修改时返回 false 表示用户选择留在编辑态
@@ -123,6 +217,7 @@ namespace MyVerseXRSDK.Editor
 
         private void OnSceneGUI()
         {
+            if (m_Uploading) return;   // 上传在途冻结拖拽：上传/落盘用的是点击保存时的快照，途中改动会被丢弃
             if (!Target.isEditing || Target.workingCopy == null) return;
             var wc = Target.workingCopy;
             var rotation = Quaternion.Euler(wc.rotation);
@@ -198,14 +293,32 @@ namespace MyVerseXRSDK.Editor
             }
         }
 
+        // 常显开关：写在组件序列化字段上，Gizmo 依据它在未选中时也绘制列表中选中的地块
+        private void DrawAlwaysShowToggle()
+        {
+            EditorGUI.BeginChangeCheck();
+            bool show = EditorGUILayout.ToggleLeft("常显选中地块（未选中本对象时也显示列表中选中/编辑中的地块）",
+                                                   Target.alwaysShowTiles);
+            if (EditorGUI.EndChangeCheck())
+            {
+                Undo.RecordObject(Target, "切换地块常显");
+                Target.alwaysShowTiles = show;
+                EditorUtility.SetDirty(Target);
+                SceneView.RepaintAll();
+            }
+        }
+
         // ------ 工具行：搜索 / 创建 / 刷新 ------
 
         private void DrawToolbar()
         {
             EditorGUILayout.BeginHorizontal();
             m_Search = EditorGUILayout.TextField("搜索", m_Search);
-            if (GUILayout.Button("创建新条目", GUILayout.Width(84f)))
-                OnCreateEntryClicked();
+            using (new EditorGUI.DisabledScope(m_FetchingSpecs))
+            {
+                if (GUILayout.Button(m_FetchingSpecs ? "拉取中…" : "创建新条目", GUILayout.Width(84f)))
+                    OnCreateEntryClicked();
+            }
             if (GUILayout.Button("刷新", GUILayout.Width(44f)))
                 Repaint();
             EditorGUILayout.EndHorizontal();
@@ -223,35 +336,51 @@ namespace MyVerseXRSDK.Editor
                     SdkAuthWindow.Open();
                 return;
             }
+            m_FetchingSpecs = true;
             RegionToolServices.SpecSource.Fetch(
-                ShowSpecMenu,
-                error => EditorUtility.DisplayDialog("拉取区域规格失败",
-                    $"{error}\n\n可再次点击\"创建新条目\"重试。", "确定"));
+                specs =>
+                {
+                    if (this == null) return;   // Inspector 已关闭/切换选中对象（Unity 假 null）
+                    m_FetchingSpecs = false;
+                    // 空列表不弹菜单（置灰菜单项易被忽略），改用明确的提示弹窗
+                    if (specs == null || specs.Count == 0)
+                    {
+                        Repaint();
+                        EditorUtility.DisplayDialog("无可用规格",
+                            "远端区域规格列表为空，无法创建条目。\n请确认开发者平台已为该 appId 配置区域规格。", "确定");
+                        return;
+                    }
+                    m_PendingSpecs = specs;     // 菜单弹出转到下一次 OnInspectorGUI（需 GUI 事件上下文）
+                    Repaint();
+                },
+                error =>
+                {
+                    if (this != null)
+                    {
+                        m_FetchingSpecs = false;
+                        Repaint();
+                    }
+                    EditorUtility.DisplayDialog("拉取区域规格失败",
+                        $"{error}\n\n可再次点击\"创建新条目\"重试。", "确定");
+                });
         }
 
         private void ShowSpecMenu(System.Collections.Generic.List<RegionSpec> specs)
         {
             var menu = new GenericMenu();
-            if (specs == null || specs.Count == 0)
+            foreach (var spec in specs)
             {
-                menu.AddDisabledItem(new GUIContent("（远端无可用规格）"));
-            }
-            else
-            {
-                foreach (var spec in specs)
+                // 已持久化条目 + 当前未保存的新建工作副本 都算“已存在”→ 置灰
+                bool taken = Target.dataList.ContainsId(spec.id) ||
+                             (Target.isEditing && Target.isNewEntry && Target.workingCopy.id == spec.id);
+                if (taken)
                 {
-                    // 已持久化条目 + 当前未保存的新建工作副本 都算“已存在”→ 置灰
-                    bool taken = Target.dataList.ContainsId(spec.id) ||
-                                 (Target.isEditing && Target.isNewEntry && Target.workingCopy.id == spec.id);
-                    if (taken)
-                    {
-                        menu.AddDisabledItem(new GUIContent(spec.id));
-                    }
-                    else
-                    {
-                        var captured = spec; // 闭包捕获当前项
-                        menu.AddItem(new GUIContent(captured.id), false, () => BeginCreate(captured));
-                    }
+                    menu.AddDisabledItem(new GUIContent(spec.id));
+                }
+                else
+                {
+                    var captured = spec; // 闭包捕获当前项
+                    menu.AddItem(new GUIContent(captured.id), false, () => BeginCreate(captured));
                 }
             }
             menu.ShowAsContext();
@@ -259,11 +388,14 @@ namespace MyVerseXRSDK.Editor
 
         private void BeginCreate(RegionSpec spec)
         {
-            // 长宽默认按 id 拆取（"12x6"→12/6）；拆不出再用规格自带值兜底。后续可在编辑面板改动，id 不变
-            if (!RegionIdUtil.TryParseId(spec.id, out var len, out var width))
+            // 绘制默认值取规格自带的远端尺寸（width/height，可能带小数）；
+            // 缺省（≤0）时回退按 id 拆取（"6X12"→len 12/width 6）。后续可在编辑面板改动，id 不变
+            var len = spec.len;
+            var width = spec.width;
+            if ((len <= 0f || width <= 0f) && RegionIdUtil.TryParseId(spec.id, out var parsedLen, out var parsedWidth))
             {
-                len = spec.len;
-                width = spec.width;
+                len = parsedLen;
+                width = parsedWidth;
             }
 
             Undo.RecordObject(Target, "创建地块条目");
@@ -285,29 +417,42 @@ namespace MyVerseXRSDK.Editor
 
         // ------ 条目列表（行点击进入编辑态在 Task 7 接管）------
 
+        private bool MatchesSearch(LocalRegionData entry)
+        {
+            if (entry == null) return false;
+            if (string.IsNullOrEmpty(m_Search)) return true;
+            return entry.id != null && entry.id.Contains(m_Search);
+        }
+
         private void DrawEntryList()
         {
             var entries = Target.dataList.entries;
-            if (entries.Count == 0)
-            {
-                EditorGUILayout.HelpBox("暂无条目", MessageType.None);
-                return;
-            }
+            // 新建中的工作副本落盘前不在 entries 里，以"未保存"草稿行显示，避免被误读成"创建了但列表不显示"
+            bool hasDraftRow = Target.isEditing && Target.isNewEntry && Target.workingCopy != null;
+
+            // 列表区域：独立区块（标题 + 盒式背景），滚动区固定五行高，不随条数收缩
+            EditorGUILayout.Space(6f);
+            EditorGUILayout.BeginVertical("HelpBox");
+            EditorGUILayout.LabelField($"地块条目列表（{entries.Count} 条{(hasDraftRow ? "，+1 未保存" : "")}）",
+                                       EditorStyles.boldLabel);
+
+            float rowHeight = EditorGUIUtility.singleLineHeight + 10f;   // box 行含内外边距的近似高度
+            float viewHeight = EntriesPerPage * rowHeight + 8f;
+            m_EntryListScroll = EditorGUILayout.BeginScrollView(m_EntryListScroll, GUILayout.Height(viewHeight));
+            int drawnRows = 0;
             for (int i = 0; i < entries.Count; i++)
             {
                 var entry = entries[i];
-                if (entry == null) continue;
-                if (!string.IsNullOrEmpty(m_Search) &&
-                    (entry.id == null || !entry.id.Contains(m_Search)))
-                    continue;
+                if (!MatchesSearch(entry)) continue;
 
-                // 选中态：正在编辑的行高亮（背景 + ▶ 前缀 + 加粗）
+                // 行醒目化：正在编辑的行蓝色高亮（▶ 前缀 + 加粗），其余行深浅交替（斑马纹）
                 bool selected = Target.isEditing && !Target.isNewEntry && Target.editingIndex == i;
                 var prevBackground = GUI.backgroundColor;
-                if (selected)
-                    GUI.backgroundColor = new Color(0.35f, 0.65f, 1f);
+                GUI.backgroundColor = selected ? new Color(0.35f, 0.65f, 1f)
+                    : drawnRows % 2 == 0 ? Color.white : new Color(0.65f, 0.65f, 0.65f);
                 EditorGUILayout.BeginHorizontal("box");
                 GUI.backgroundColor = prevBackground;
+                drawnRows++;
                 if (GUILayout.Button($"{(selected ? "▶ " : "")}ID: {entry.id} ｜ 长{entry.len} 宽{entry.width}",
                                      selected ? EditorStyles.boldLabel : EditorStyles.label))
                     StartEditExisting(i);
@@ -319,12 +464,33 @@ namespace MyVerseXRSDK.Editor
                         entries.RemoveAt(i);
                         EditorUtility.SetDirty(Target.dataList);
                         AssetDatabase.SaveAssets();
+                        OnEntryDeleted(i);
                         EditorGUILayout.EndHorizontal();
+                        EditorGUILayout.EndScrollView();
+                        EditorGUILayout.EndVertical();
                         GUIUtility.ExitGUI(); // 列表已变更，中断本帧绘制避免下标错乱
                     }
                 }
                 EditorGUILayout.EndHorizontal();
             }
+            // 新建草稿行：橙黄底 + "未保存"标记（与蓝色编辑选中区分），保存成功后转为正式行
+            if (hasDraftRow)
+            {
+                var wc = Target.workingCopy;
+                var prevBackground = GUI.backgroundColor;
+                GUI.backgroundColor = new Color(1f, 0.85f, 0.4f);
+                EditorGUILayout.BeginHorizontal("box");
+                GUI.backgroundColor = prevBackground;
+                GUILayout.Label($"▶ ID: {wc.id} ｜ 长{wc.len} 宽{wc.width}（新建，未保存）", EditorStyles.boldLabel);
+                EditorGUILayout.EndHorizontal();
+            }
+            // 空态提示画在固定高度的滚动区内，面板尺寸保持稳定
+            if (entries.Count == 0 && !hasDraftRow)
+                EditorGUILayout.HelpBox("暂无条目", MessageType.None);
+            else if (drawnRows == 0 && !hasDraftRow)
+                EditorGUILayout.HelpBox("无匹配搜索的条目", MessageType.None);
+            EditorGUILayout.EndScrollView();
+            EditorGUILayout.EndVertical();
         }
     }
 }
