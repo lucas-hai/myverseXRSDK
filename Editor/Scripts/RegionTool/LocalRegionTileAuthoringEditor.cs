@@ -389,7 +389,7 @@ namespace MyVerseXRSDK.Editor
         private void BeginCreate(RegionSpec spec)
         {
             // 绘制默认值取规格自带的远端尺寸（width/height，可能带小数）；
-            // 缺省（≤0）时回退按 id 拆取（"6X12"→len 12/width 6）。后续可在编辑面板改动，id 不变
+            // 缺省（≤0）时回退按 id 拆取（"6x12"→len 12/width 6）。后续可在编辑面板改动，id 不变
             var len = spec.len;
             var width = spec.width;
             if ((len <= 0f || width <= 0f) && RegionIdUtil.TryParseId(spec.id, out var parsedLen, out var parsedWidth))

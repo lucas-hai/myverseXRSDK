@@ -198,7 +198,7 @@ NotInitialized → Initializing → LocalReady → Connecting → Connected
 
 #### 场景根节点驱动（Region 体系，唯一驱动源）
 
-- 登录响应 `regionInfo` 携带首帧 + 运行中 `RegionInfoPush` 变更推送（全量快照覆盖）。SDK 用远端实际长宽生成临时 id（**取绝对值后截断取整**，不四舍五入，按远端 tagId 形态拼 `宽X长`、大写 X，如 `len:12.35, width:6.18` → `6X12`）匹配本地地块条目（地块编辑器产出，见 §12.2），按区域公式驱动根节点：
+- 登录响应 `regionInfo` 携带首帧 + 运行中 `RegionInfoPush` 变更推送（全量快照覆盖）。SDK 用远端实际长宽生成临时 id（**取绝对值后截断取整**，不四舍五入，按远端 tagId 形态拼 `宽x长`、小写 x，如 `len:12.35, width:6.18` → `6x12`）匹配本地地块条目（地块编辑器产出，见 §12.2），按区域公式驱动根节点：
   ```
   基础位置 = 区域center − 地块position + 区域offset          （逐分量）
   基础旋转 = 区域rotation − 地块rotation + 区域offsetRotation （欧拉角逐分量）
@@ -466,7 +466,7 @@ UnInit 是"反向 + 对称 + 幂等"的：卸载顺序与装配顺序相反、Sy
 
 ## 11. 版本与支持
 
-- **当前版本**：MyVerse XR SDK **3.1.1**（命名空间 `MyVerseXRSDK`）。
+- **当前版本**：MyVerse XR SDK **3.1.2**（命名空间 `MyVerseXRSDK`）。
 - **更新记录**：见 [CHANGELOG.md](../CHANGELOG.md)（含 v1.x → v2.x 及推流 v3 切镜化重构的 Migration Guide）。
 - **API 细节**：见 [API 参考手册](api-reference.md)。
 - **技术支持**：`support@myverse.com`。
@@ -487,7 +487,7 @@ Editor 工具链的远端能力（区域规格列表拉取、地块数据上传�
 
 ### 12.2 本地区域地块编辑器
 
-用于制作"本地区域数据列表"资产；运行时区域对齐按远端下发长宽生成临时 id（tagId 形态 `宽X长`，如 `6X12`）匹配本地条目（运行时链路随本版本系列接入，见 CHANGELOG）。
+用于制作"本地区域数据列表"资产；运行时区域对齐按远端下发长宽生成临时 id（tagId 形态 `宽x长` 小写，如 `6x12`）匹配本地条目（运行时链路随本版本系列接入，见 CHANGELOG）。
 
 使用步骤：
 1. 先完成 SDK 验证（见 12.1）——创建条目与保存上传需要。
