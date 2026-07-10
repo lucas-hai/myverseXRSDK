@@ -213,7 +213,7 @@ NotInitialized → Initializing → LocalReady → Connecting → Connected
 游戏服务端等宿主若用**自己的消息链路**连中控（SDK 不建连接），接入方式：
 
 1. `InitMVXRSDK(serverId, InitMode.Offline)`——本地就绪即可，无网络阶段；
-2. 宿主收到登录响应 `regionInfo` 首帧 / `RegionInfoPush` 推送后调 **`MVXRSDK.ApplyRegionInfo(push)`** 注入（全量快照幂等，重复注入以最后一次为准）；
+2. 宿主收到登录响应 `regionInfo` 首帧 / `RegionInfoPush` 推送后调 **`MVXRSDK.ApplyRegionInfo(push)`** 注入（全量快照幂等，重复注入以最后一次为准）。宿主工程若有**自有同名 PB 生成类**（类型遮蔽，无法直接传 SDK 类型实例），改用 **`ApplyRegionInfo(byte[])`** 字节重载：消息回调原始 buffer 直接透传，登录响应字段用 `loginRsp.RegionInfo.ToByteArray()`；
 3. SDK 完成地块匹配 + 区域公式计算后触发 **`MVXRSDK.OnRegionApplied(position, eulerAngles)`**——宿主把位姿写进自己的同步通道（如 FishNet SyncVar）分发给游戏客户端，可完全不注册根节点；晚订阅补齐用 **`MVXRSDK.TryGetRegionPose(out pos, out euler)`**（无匹配/未收到快照返回 false）。
 
 工程内同样需要地块编辑器产出的 `Resources/MVXRSDK/LocalRegionData` 资产（匹配键，见 §12.2）。
@@ -466,7 +466,7 @@ UnInit 是"反向 + 对称 + 幂等"的：卸载顺序与装配顺序相反、Sy
 
 ## 11. 版本与支持
 
-- **当前版本**：MyVerse XR SDK **3.1.0**（命名空间 `MyVerseXRSDK`）。
+- **当前版本**：MyVerse XR SDK **3.1.1**（命名空间 `MyVerseXRSDK`）。
 - **更新记录**：见 [CHANGELOG.md](../CHANGELOG.md)（含 v1.x → v2.x 及推流 v3 切镜化重构的 Migration Guide）。
 - **API 细节**：见 [API 参考手册](api-reference.md)。
 - **技术支持**：`support@myverse.com`。

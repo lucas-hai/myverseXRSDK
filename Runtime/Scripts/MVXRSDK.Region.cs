@@ -32,6 +32,33 @@ namespace MyVerseXRSDK
         }
 
         /// <summary>
+        /// 注入 Region 全量快照的原始字节（RegionInfoPush 的 protobuf 序列化数据）。
+        /// 供宿主工程存在**自有同名 PB 生成类**的场景使用：同名类型在宿主程序集内遮蔽 SDK 导出类型
+        /// （CS0436），宿主构造的 RegionInfoPush 实例无法直接传给上面的重载——改传字节即可：
+        /// 消息回调的原始 buffer 直接透传；登录响应字段用 `loginRsp.RegionInfo.ToByteArray()`。
+        /// 解析失败忽略并告警。
+        /// </summary>
+        public static void ApplyRegionInfo(byte[] data)
+        {
+            if (data == null || data.Length == 0)
+            {
+                MVXRSDKLog.Warning("ApplyRegionInfo: 快照字节为空，注入被忽略");
+                return;
+            }
+            RegionInfoPush push;
+            try
+            {
+                push = RegionInfoPush.Parser.ParseFrom(data);
+            }
+            catch (System.Exception e)
+            {
+                MVXRSDKLog.Warning($"ApplyRegionInfo: RegionInfoPush 字节解析失败，注入被忽略：{e.Message}");
+                return;
+            }
+            ApplyRegionInfo(push);
+        }
+
+        /// <summary>
         /// 查询最近一次 Region 位姿计算结果（即 <see cref="OnRegionApplied"/> 的最新参数值），
         /// 供晚订阅方补齐当前状态。无结果（未收到快照 / 地块未匹配 / SDK 未初始化）返回 false。
         /// </summary>

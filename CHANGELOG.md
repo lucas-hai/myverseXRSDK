@@ -6,6 +6,13 @@
 
 ---
 
+## [3.1.1] - 2026-07-10
+
+### Added
+- `MVXRSDK.ApplyRegionInfo(byte[])` 字节重载：宿主工程存在自有同名 PB 生成类时（同名类型在宿主程序集内遮蔽 SDK 导出类型，无法直接传 SDK 的 `RegionInfoPush` 实例），消息回调原始 buffer 直接透传、登录响应字段 `ToByteArray()` 后传入；SDK 内部用自身 Parser 解析，失败告警忽略
+
+---
+
 ## [3.1.0] - 2026-07-10 - Region 区域对齐
 
 ### Added
