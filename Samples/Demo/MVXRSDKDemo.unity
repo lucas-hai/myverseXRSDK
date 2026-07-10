@@ -788,6 +788,62 @@ MonoBehaviour:
     m_MipBias: 0
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
+--- !u!1 &1180180221
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1180180223}
+  - component: {fileID: 1180180222}
+  m_Layer: 0
+  m_Name: "\u672C\u5730\u533A\u57DF\u5730\u5757\u7F16\u8F91\u5668"
+  m_TagString: EditorOnly
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1180180222
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1180180221}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dea443c50b19bfc4ab7487771bd621a9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  dataList: {fileID: 11400000, guid: 2b9429334747baa43bdd8199d53bf143, type: 2}
+  alwaysShowTiles: 1
+  isEditing: 1
+  isNewEntry: 0
+  editingIndex: 1
+  hasUnsavedChanges: 1
+  workingCopy:
+    id: 6X12
+    len: 12
+    width: 6
+    position: {x: 12.961686, y: 0, z: 0}
+    rotation: {x: -0, y: 0, z: 0}
+--- !u!4 &1180180223
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1180180221}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1185564260
 GameObject:
   m_ObjectHideFlags: 0
@@ -1176,8 +1232,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   initMode: 1
-  deviceId: lzy10
-  controlServerAddress: http://192.168.1.158:7015
+  deviceId: zb200
+  controlServerAddress: http://192.168.1.59:7015
   initOnStart: 1
   xrOffsetNode: {fileID: 794924890}
   selfNode: {fileID: 420374101}
@@ -1193,6 +1249,7 @@ MonoBehaviour:
   directorLenses: 1
   directorDurationSec: 50
   directorRecord: 0
+  directorFileName: 
   syncSameRoomAvatar: 1
   sameRoomAvatarDistance: 2
   autoVerifyOnConnected: 0
@@ -1360,3 +1417,4 @@ SceneRoots:
   - {fileID: 420925678}
   - {fileID: 1056337954}
   - {fileID: 1341410760}
+  - {fileID: 1180180223}
