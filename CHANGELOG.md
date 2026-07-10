@@ -6,7 +6,7 @@
 
 ---
 
-## [Unreleased]
+## [3.1.0] - 2026-07-10 - Region 区域对齐
 
 ### Added
 - SDK 验证面板：未验证时打开工程自动弹出（每编辑器会话一次），菜单 `Tools/MyVerse XRSDK/SDK 验证`；凭据存 `MVXRSDKSettingsAsset`（随项目入 git，团队共享，验证一次全员生效）。区域规格拉取与地块上传未验证时拦截并引导验证

@@ -13,7 +13,7 @@ namespace MyVerseXRSDK
     public sealed class MVXRSDKSettingsAsset : ScriptableObject
     {
         /// <summary>开发者平台默认地址（联调临时环境，正式环境就绪后在验证面板/设置资产改）。</summary>
-        public const string DefaultServerUrl = "http://192.168.1.220:7888";
+        public const string DefaultServerUrl = "http://172.0.0.218:3888";
 
         [Tooltip("开发者平台服务地址，空则用默认值")]
         public string serverUrl = DefaultServerUrl;
