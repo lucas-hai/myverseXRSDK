@@ -12,7 +12,8 @@ namespace MyVerseXRSDK.Editor
         private string m_ErrorMessage;
         private bool m_Verifying;
 
-        [MenuItem("Tools/MyVerse XRSDK/SDK 验证")]
+        // 本工程所有 SDK 的编辑器工具统一挂顶级菜单 MyVerse（与 MyVerse/Mocap 系对齐）
+        [MenuItem("MyVerse/XRSDK/SDK 验证")]
         public static void Open()
         {
             var window = GetWindow<SdkAuthWindow>(utility: true, title: "MyVerse XRSDK 验证");

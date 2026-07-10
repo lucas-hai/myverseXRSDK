@@ -6,6 +6,13 @@
 
 ---
 
+## [3.1.4] - 2026-07-10
+
+### Changed
+- 编辑器菜单统一挂顶级 `MyVerse`（与 MyVerse/Mocap 系工具对齐）：SDK 验证 `Tools/MyVerse XRSDK/SDK 验证` → `MyVerse/XRSDK/SDK 验证`；地块编辑器 Hierarchy 右键 `GameObject/MyVerse XRSDK/` → `GameObject/MyVerse/`
+
+---
+
 ## [3.1.3] - 2026-07-10
 
 ### Added

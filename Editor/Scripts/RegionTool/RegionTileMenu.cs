@@ -6,7 +6,8 @@ namespace MyVerseXRSDK.Editor
     /// <summary>Hierarchy 右键创建地块编辑器对象。</summary>
     internal static class RegionTileMenu
     {
-        [MenuItem("GameObject/MyVerse XRSDK/生成本地区域地块编辑器", false, 10)]
+        // Hierarchy 右键菜单必须挂 GameObject/ 前缀（Unity 机制），子路径统一 MyVerse
+        [MenuItem("GameObject/MyVerse/生成本地区域地块编辑器", false, 10)]
         private static void CreateEditorObject(MenuCommand command)
         {
             var go = new GameObject("本地区域地块编辑器");

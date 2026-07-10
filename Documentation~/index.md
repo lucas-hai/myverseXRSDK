@@ -466,7 +466,7 @@ UnInit 是"反向 + 对称 + 幂等"的：卸载顺序与装配顺序相反、Sy
 
 ## 11. 版本与支持
 
-- **当前版本**：MyVerse XR SDK **3.1.3**（命名空间 `MyVerseXRSDK`）。
+- **当前版本**：MyVerse XR SDK **3.1.4**（命名空间 `MyVerseXRSDK`）。
 - **更新记录**：见 [CHANGELOG.md](../CHANGELOG.md)（含 v1.x → v2.x 及推流 v3 切镜化重构的 Migration Guide）。
 - **API 细节**：见 [API 参考手册](api-reference.md)。
 - **技术支持**：`support@myverse.com`。
@@ -479,7 +479,7 @@ UnInit 是"反向 + 对称 + 幂等"的：卸载顺序与装配顺序相反、Sy
 
 Editor 工具链的远端能力（区域规格列表拉取、地块数据上传）需要 appId 与 AccessToken（在开发者平台生成的长期 API 令牌）：
 
-1. 打开工程时若未验证会自动弹出验证面板（每个编辑器会话最多提示一次）；也可从菜单 Tools → MyVerse XRSDK → SDK 验证打开。
+1. 打开工程时若未验证会自动弹出验证面板（每个编辑器会话最多提示一次）；也可从菜单 MyVerse → XRSDK → SDK 验证打开。
 2. 填写服务器地址（默认联调环境）、appId 与 AccessToken，点"验证"。SDK 会调开发者平台接口校验令牌有效性（无效/过期/已轮换会给出对应提示）。通过后保存在 `MVXRSDKSettingsAsset`（默认 `Assets/MVXRSDK/MVXRSDKSettings.asset`，随项目入 git，团队共享，验证一次全员生效）。
 3. 未验证时相关远端功能会被拦截并引导打开本面板。
 
@@ -491,7 +491,7 @@ Editor 工具链的远端能力（区域规格列表拉取、地块数据上传�
 
 使用步骤：
 1. 先完成 SDK 验证（见 12.1）——创建条目与保存上传需要。
-2. Hierarchy 右键 → MyVerse XRSDK → 生成本地区域地块编辑器（对象 tag=EditorOnly，不会进包）。
+2. Hierarchy 右键 → MyVerse → 生成本地区域地块编辑器（对象 tag=EditorOnly，不会进包）。
 3. Inspector 指定或"新建"配置文件——**必须位于任一 Resources 根下的 `MVXRSDK/LocalRegionData.asset`**（运行时固定路径加载，放错位置工具会给警告）。
 4. 点"创建新条目"从远端规格列表选 id（本地已有的 id 置灰）；SceneView 拖拽底框调整位置/旋转，或在面板直接输入数值。
 5. 点"保存"：数据先上传远端（`POST /api/region/block`），成功后才写入本地资产；失败会报错且不保存，可修改后重试。注意后端当前为追加插入，同一 id 重复保存会在服务端累积多条记录。

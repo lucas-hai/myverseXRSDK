@@ -4,7 +4,7 @@ namespace MyVerseXRSDK
 {
     /// <summary>
     /// 本地区域地块编辑器的场景载体（仅编辑期使用）。
-    /// 创建入口：Hierarchy 右键 → MyVerse XRSDK → 生成本地区域地块编辑器；tag=EditorOnly，打包自动剔除。
+    /// 创建入口：Hierarchy 右键 → MyVerse → 生成本地区域地块编辑器；tag=EditorOnly，打包自动剔除。
     /// 运行时逻辑不读本组件——运行时数据走 LocalRegionDataList 资产（Resources 固定路径）。
     /// 编辑状态字段序列化在组件上是为了支持 Undo 与域重载存活。
     /// </summary>

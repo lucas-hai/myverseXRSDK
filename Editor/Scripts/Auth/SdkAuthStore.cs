@@ -55,7 +55,7 @@ namespace MyVerseXRSDK.Editor
             var settings = FindSettings();
             if (settings == null || !settings.verified)
             {
-                error = "尚未完成 SDK 验证，请先通过 Tools/MyVerse XRSDK/SDK 验证";
+                error = "尚未完成 SDK 验证，请先通过菜单 MyVerse/XRSDK/SDK 验证";
                 return false;
             }
             if (string.IsNullOrWhiteSpace(settings.appId) || string.IsNullOrWhiteSpace(settings.accessToken))

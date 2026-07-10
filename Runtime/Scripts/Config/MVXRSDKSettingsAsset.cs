@@ -5,7 +5,7 @@ namespace MyVerseXRSDK
 {
     /// <summary>
     /// SDK 设置配置文件：保存开发者平台地址与验证凭据（appId + AccessToken）及验证状态。
-    /// 由验证面板（Tools/MyVerse XRSDK/SDK 验证）自动创建与写入；也可 Project 右键 Create 手建。
+    /// 由验证面板（菜单 MyVerse/XRSDK/SDK 验证）自动创建与写入；也可 Project 右键 Create 手建。
     /// 刻意不放 Resources/：凭据仅编辑器工具链使用，避免令牌打进真机包。
     /// 注意：资产随项目入 git，团队共享凭据、验证一次全员生效。
     /// </summary>
