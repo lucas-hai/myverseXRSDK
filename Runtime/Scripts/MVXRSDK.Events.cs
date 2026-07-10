@@ -1,4 +1,5 @@
 using System;
+using UnityEngine;
 
 namespace MyVerseXRSDK
 {
@@ -33,6 +34,25 @@ namespace MyVerseXRSDK
         private static void ClearTransactionVerificationSubscribers()
         {
             OnTransactionVerification = null;
+        }
+
+        // ============================== Region 区域对齐 ==============================
+
+        /// <summary>
+        /// Region 位姿计算完成并应用后触发（仅地块匹配成功时；无匹配只告警不触发）。
+        /// 参数：场景根节点应有的 localPosition、localEulerAngles（区域公式最终结果）。
+        /// 服务端形态用法：订阅本事件把位姿写进自己的同步通道（如 FishNet SyncVar）分发给
+        /// 游戏客户端，可不注册任何根节点；晚订阅补齐用 <see cref="TryGetRegionPose"/>。
+        /// </summary>
+        public static event Action<Vector3, Vector3> OnRegionApplied;
+
+        internal static void RaiseRegionApplied(Vector3 position, Vector3 eulerAngles) =>
+            OnRegionApplied?.Invoke(position, eulerAngles);
+
+        /// <remarks>event 字段在其声明类内部允许直接赋空清空所有订阅。</remarks>
+        private static void ClearRegionEventSubscribers()
+        {
+            OnRegionApplied = null;
         }
 
         // ============================== 推流 / 录屏 ==============================

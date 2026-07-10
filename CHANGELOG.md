@@ -14,6 +14,7 @@
 - 包内首个 Editor 程序集 `MVXRSDK.Editor`
 - **Region 区域对齐运行时链路**：登录响应 `Login.Response.regionInfo(13)` 首帧 + `RegionInfoPush` 变更推送（全量快照）；远端实际长宽取**绝对值截断取整**（不四舍五入）按远端 tagId 形态（`宽X长`、大写 X，如 `6X12`）生成临时 id 匹配本地地块条目，区域公式（逐分量：center−地块position+offset+gameOffset / rotation−地块rotation+offsetRotation+gameOffsetRotation）驱动场景根节点
 - **接入开发者平台真实接口**（联调环境 `http://192.168.1.220:7888`，服务地址存 `MVXRSDKSettingsAsset.serverUrl`）：SDK 验证 `POST /api/auth/accessToken/verify`（`HttpAccessTokenVerifier`）、区域规格列表 `GET /api/region/list`（`HttpRegionSpecSource`，tagId→id / height→len / width→width）、地块上传 `POST /api/region/block`（`HttpRegionDataUploader`）。Editor 侧 HTTP 统一走 `EditorHttp`（UnityWebRequest + `EditorApplication.update` 异步，不阻塞主线程）
+- **Region 服务端形态 API**（宿主自持中控连接、SDK 不建网络时的接入通道，**纯增量，直连接入方零影响**）：`MVXRSDK.ApplyRegionInfo(RegionInfoPush)` 注入全量快照（Offline 模式可用）；`MVXRSDK.OnRegionApplied(position, eulerAngles)` 计算完成事件（宿主写自己的同步通道分发客户端，可不注册根节点；联网模式同样触发，不订阅不感知）；`MVXRSDK.TryGetRegionPose` 查询最近计算结果（晚订阅补齐）
 
 ### Changed
 - SDK 验证模型定稿为 **appId + AccessToken**（开发者平台生成的长期 API 令牌，"验证密钥"概念作废）：`MVXRSDKSettingsAsset.secretKey` 更名 `accessToken`（`FormerlySerializedAs` 平滑迁移）；验证面板新增服务器地址栏

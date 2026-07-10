@@ -206,7 +206,19 @@ NotInitialized → Initializing → LocalReady → Connecting → Connected
   ```
   匹配不到地块 / 未提供 `Resources/MVXRSDK/LocalRegionData` 资产时根节点保持原位并告警。仅登录首帧或长宽变化时重查地块，纯游戏偏移变更复用缓存。
 - **旧 `GameScenePush` 的 Offset/Rotation 根节点偏移功能已废弃**：新版客户端不解析（后端为老版本客户端保留字段）；未接入 Region 的房间（`regionInfo` 为空）根节点不偏移。障碍物同步（SceneData）不受影响，注册接口 `RegisterRootNode` 系列不变。
-- Offline 模式无网络阶段，Region 驱动不生效。
+- Offline 模式无网络阶段，SDK 不会自行收到 Region 推送；可配合下述注入接口使用（服务端形态）。
+
+#### 服务端形态（宿主自持中控连接）
+
+游戏服务端等宿主若用**自己的消息链路**连中控（SDK 不建连接），接入方式：
+
+1. `InitMVXRSDK(serverId, InitMode.Offline)`——本地就绪即可，无网络阶段；
+2. 宿主收到登录响应 `regionInfo` 首帧 / `RegionInfoPush` 推送后调 **`MVXRSDK.ApplyRegionInfo(push)`** 注入（全量快照幂等，重复注入以最后一次为准）；
+3. SDK 完成地块匹配 + 区域公式计算后触发 **`MVXRSDK.OnRegionApplied(position, eulerAngles)`**——宿主把位姿写进自己的同步通道（如 FishNet SyncVar）分发给游戏客户端，可完全不注册根节点；晚订阅补齐用 **`MVXRSDK.TryGetRegionPose(out pos, out euler)`**（无匹配/未收到快照返回 false）。
+
+工程内同样需要地块编辑器产出的 `Resources/MVXRSDK/LocalRegionData` 资产（匹配键，见 §12.2）。
+
+> **对直连接入方零影响**：服务端形态是纯增量通道。联网模式（Production/WsDirect）下 SDK 自行接收推送、驱动注册根节点的既有流程完全不变，无需调用注入接口、无需订阅新事件；`OnRegionApplied` / `TryGetRegionPose` 在联网模式下同样可用（可选能力，不用不感知）。
 
 **障碍物**按服务端列表与本地 diff 实时增删改（新增实例化、消失回收、变更则原地更新或重建），分椭圆 / 矩形两类，走对象池。每个障碍物可选距离检测：靠近玩家才显示。
 

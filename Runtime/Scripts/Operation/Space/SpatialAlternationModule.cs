@@ -120,6 +120,22 @@ namespace MyVerseXRSDK
             m_LastComputedPos = position;
             m_LastComputedRot = eulerAngles;
             ApplyToAll(position, eulerAngles, $"Region[{runtimeId}]");
+            // 对外广播计算结果：服务端形态（宿主自持连接）订阅后写自己的同步通道，可不注册根节点
+            MVXRSDK.RaiseRegionApplied(position, eulerAngles);
+        }
+
+        /// <summary>最近一次 Region 计算结果；无结果（未收到快照/未匹配/已 UnInit）返回 false。</summary>
+        public bool TryGetLastComputedPose(out Vector3 position, out Vector3 eulerAngles)
+        {
+            if (m_LastComputedPos.HasValue)
+            {
+                position = m_LastComputedPos.Value;
+                eulerAngles = m_LastComputedRot;
+                return true;
+            }
+            position = default;
+            eulerAngles = default;
+            return false;
         }
 
         private LocalRegionDataList GetDataList()

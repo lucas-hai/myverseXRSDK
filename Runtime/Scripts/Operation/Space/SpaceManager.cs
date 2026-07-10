@@ -71,6 +71,18 @@ namespace MyVerseXRSDK
             m_Store.ApplyRegionPush(push);
         }
 
+        /// <summary>最近一次 Region 位姿计算结果（MVXRSDK.TryGetRegionPose 的实现）。</summary>
+        internal static bool TryGetRegionPose(out Vector3 position, out Vector3 eulerAngles)
+        {
+            if (!s_Initialized || m_SpatialAlternation == null)
+            {
+                position = default;
+                eulerAngles = default;
+                return false;
+            }
+            return m_SpatialAlternation.TryGetLastComputedPose(out position, out eulerAngles);
+        }
+
 
         private static void OnLoginSuccess()
         {

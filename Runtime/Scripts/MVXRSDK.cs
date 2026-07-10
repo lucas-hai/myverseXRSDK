@@ -247,6 +247,7 @@ namespace MyVerseXRSDK
             NetworkFailureHUD.UnInit();
             ClearTransactionVerificationSubscribers();
             ClearStreamEventSubscribers();
+            ClearRegionEventSubscribers();
 
             // 3) 系统层 reset（必须在 Manager UnInit 之后——Manager 内部还要走最后一次订阅取消）
             // 严格对称：与 InitSystems 内 4 个 *.Init() 一一对应，全部释放后下次 Init 可干净重建
