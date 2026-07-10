@@ -819,16 +819,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   dataList: {fileID: 11400000, guid: 2b9429334747baa43bdd8199d53bf143, type: 2}
   alwaysShowTiles: 1
-  isEditing: 1
+  isEditing: 0
   isNewEntry: 0
-  editingIndex: 1
-  hasUnsavedChanges: 1
+  editingIndex: -1
+  hasUnsavedChanges: 0
   workingCopy:
     id: 6X12
     len: 12
     width: 6
-    position: {x: 12.961686, y: 0, z: 0}
-    rotation: {x: -0, y: 0, z: 0}
+    position: {x: 0, y: 0, z: 0}
+    rotation: {x: 0, y: 0, z: 0}
 --- !u!4 &1180180223
 Transform:
   m_ObjectHideFlags: 0
@@ -1395,7 +1395,7 @@ Transform:
   m_GameObject: {fileID: 1978039813}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0.81, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
