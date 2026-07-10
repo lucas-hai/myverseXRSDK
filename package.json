@@ -25,7 +25,7 @@
     {
       "displayName": "Demo",
       "description": "SDK 全模块联合示例：节点注册 / 启动模式 / 推流 / 切镜 / 录屏 / 积分。含 MVXRSDKDemo.unity 场景 + MVXRSDKDemo.cs 总控脚本",
-      "path": "Samples/Demo"
+      "path": "Samples~/Demo"
     }
   ]
 }
