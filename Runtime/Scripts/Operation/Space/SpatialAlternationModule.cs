@@ -101,6 +101,11 @@ namespace MyVerseXRSDK
         private void OnRegionChanged(RegionSnapshot snapshot)
         {
             string runtimeId = RegionIdUtil.MakeRuntimeId(snapshot.Len, snapshot.Width);
+            // 联调可观测：远端快照全量字段（区域位姿 + 空间对齐偏移 + 游戏偏移），无匹配时也打印
+            MVXRSDKLog.Info($"Region 快照到达[{runtimeId}]: 长宽=({snapshot.Len}, {snapshot.Width}), " +
+                            $"区域 center={snapshot.Center.ToString("F3")} rotation={snapshot.Rotation.ToString("F3")}, " +
+                            $"偏移 offset={snapshot.Offset.ToString("F3")} offsetRotation={snapshot.OffsetRotation.ToString("F3")}, " +
+                            $"游戏偏移 gameOffset={snapshot.GameOffset.ToString("F3")} gameOffsetRotation={snapshot.GameOffsetRotation.ToString("F3")}");
             // 仅登录首帧或长宽（临时 id）变化时重查地片；纯 gameOffset 变更复用缓存
             if (m_MatchedTile == null || !string.Equals(runtimeId, m_LastRuntimeId, StringComparison.Ordinal))
             {
@@ -119,6 +124,10 @@ namespace MyVerseXRSDK
             var (position, eulerAngles) = RegionAlignmentCalculator.Compute(snapshot, m_MatchedTile);
             m_LastComputedPos = position;
             m_LastComputedRot = eulerAngles;
+            // 无注册根节点时（服务端形态）ApplyToAll 不产生日志，这里是计算结果的唯一可见处
+            MVXRSDKLog.Info($"Region 计算完成[{runtimeId}]: 地块 position={m_MatchedTile.position.ToString("F3")} " +
+                            $"rotation={m_MatchedTile.rotation.ToString("F3")} → " +
+                            $"根节点位姿 pos={position.ToString("F3")} rot={eulerAngles.ToString("F3")}");
             ApplyToAll(position, eulerAngles, $"Region[{runtimeId}]");
             // 对外广播计算结果：服务端形态（宿主自持连接）订阅后写自己的同步通道，可不注册根节点
             MVXRSDK.RaiseRegionApplied(position, eulerAngles);

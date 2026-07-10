@@ -466,7 +466,7 @@ UnInit 是"反向 + 对称 + 幂等"的：卸载顺序与装配顺序相反、Sy
 
 ## 11. 版本与支持
 
-- **当前版本**：MyVerse XR SDK **3.1.2**（命名空间 `MyVerseXRSDK`）。
+- **当前版本**：MyVerse XR SDK **3.1.3**（命名空间 `MyVerseXRSDK`）。
 - **更新记录**：见 [CHANGELOG.md](../CHANGELOG.md)（含 v1.x → v2.x 及推流 v3 切镜化重构的 Migration Guide）。
 - **API 细节**：见 [API 参考手册](api-reference.md)。
 - **技术支持**：`support@myverse.com`。

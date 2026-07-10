@@ -6,6 +6,13 @@
 
 ---
 
+## [3.1.3] - 2026-07-10
+
+### Added
+- Region 联调日志：快照到达时打印全量字段（长宽 / 区域 center+rotation / 偏移 offset+offsetRotation / 游戏偏移 gameOffset+gameOffsetRotation，无匹配时也打印）；匹配后打印地块位姿与公式计算结果（服务端形态不注册根节点时这是计算结果的唯一日志出口）
+
+---
+
 ## [3.1.2] - 2026-07-10
 
 ### Changed
