@@ -6,14 +6,6 @@
 
 ---
 
-## [3.1.5] - 2026-07-10
-
-### Added
-- `MVXRSDK.TryGetRegionId(out regionId)`：查询远端长宽拼成的当前区域临时 id（宽x长小写截断取整，如 `4x6`，与地块匹配键同源）。与地块匹配无关——收到过快照即可查询
-- `MVXRSDK.TryGetRegionSize(out len, out width)`：查询远端下发的当前区域原始尺寸（快照 len/width，米，未取整）。同上，收到过快照即可查询
-
----
-
 ## [3.1.4] - 2026-07-10
 
 ### Changed
