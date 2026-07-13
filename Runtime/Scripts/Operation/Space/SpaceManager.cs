@@ -71,6 +71,21 @@ namespace MyVerseXRSDK
             m_Store.ApplyRegionPush(push);
         }
 
+        /// <summary>最近一次远端区域快照的原始尺寸（MVXRSDK.TryGetRegionSize 的实现）。</summary>
+        internal static bool TryGetRegionSize(out float len, out float width)
+        {
+            if (!s_Initialized || m_Store == null || !m_Store.LatestRegion.HasValue)
+            {
+                len = 0f;
+                width = 0f;
+                return false;
+            }
+            var snapshot = m_Store.LatestRegion.Value;
+            len = snapshot.Len;
+            width = snapshot.Width;
+            return true;
+        }
+
         /// <summary>最近一次 Region 位姿计算结果（MVXRSDK.TryGetRegionPose 的实现）。</summary>
         internal static bool TryGetRegionPose(out Vector3 position, out Vector3 eulerAngles)
         {

@@ -66,5 +66,15 @@ namespace MyVerseXRSDK
         {
             return SpaceManager.TryGetRegionPose(out position, out eulerAngles);
         }
+
+        /// <summary>
+        /// 查询远端下发的当前区域尺寸（RegionInfoPush.regionInfo 的 len 长 / width 宽，单位米，原始值未取整）。
+        /// 与地块匹配无关——只要收到过快照即可查询（未匹配地块时 TryGetRegionPose 为 false，本方法仍可用）。
+        /// 未收到快照 / SDK 未初始化返回 false。
+        /// </summary>
+        public static bool TryGetRegionSize(out float len, out float width)
+        {
+            return SpaceManager.TryGetRegionSize(out len, out width);
+        }
     }
 }

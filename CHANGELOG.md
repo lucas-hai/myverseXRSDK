@@ -6,6 +6,13 @@
 
 ---
 
+## [3.1.5] - 2026-07-10
+
+### Added
+- `MVXRSDK.TryGetRegionSize(out len, out width)`：查询远端下发的当前区域原始尺寸（快照 len/width，米，未取整）。与地块匹配无关——收到过快照即可查询（未匹配地块时 TryGetRegionPose 为 false，本方法仍可用）
+
+---
+
 ## [3.1.4] - 2026-07-10
 
 ### Changed
