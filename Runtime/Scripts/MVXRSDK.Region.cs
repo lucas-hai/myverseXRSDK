@@ -76,5 +76,15 @@ namespace MyVerseXRSDK
         {
             return SpaceManager.TryGetRegionSize(out len, out width);
         }
+
+        /// <summary>
+        /// 查询远端长宽拼成的当前区域临时 id（宽x长小写，截断取整，如 "4x6"）——
+        /// 与 SDK 内部地块匹配键同源（RegionIdUtil.MakeRuntimeId），可直接对照本地地块条目/远端 tagId。
+        /// 与地块匹配无关——收到过快照即可查询。未收到快照 / SDK 未初始化返回 false。
+        /// </summary>
+        public static bool TryGetRegionId(out string regionId)
+        {
+            return SpaceManager.TryGetRegionId(out regionId);
+        }
     }
 }

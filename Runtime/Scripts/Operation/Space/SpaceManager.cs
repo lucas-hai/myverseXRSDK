@@ -86,6 +86,19 @@ namespace MyVerseXRSDK
             return true;
         }
 
+        /// <summary>远端长宽拼成的当前区域临时 id（MVXRSDK.TryGetRegionId 的实现）。</summary>
+        internal static bool TryGetRegionId(out string regionId)
+        {
+            if (!s_Initialized || m_Store == null || !m_Store.LatestRegion.HasValue)
+            {
+                regionId = null;
+                return false;
+            }
+            var snapshot = m_Store.LatestRegion.Value;
+            regionId = RegionIdUtil.MakeRuntimeId(snapshot.Len, snapshot.Width);
+            return true;
+        }
+
         /// <summary>最近一次 Region 位姿计算结果（MVXRSDK.TryGetRegionPose 的实现）。</summary>
         internal static bool TryGetRegionPose(out Vector3 position, out Vector3 eulerAngles)
         {
