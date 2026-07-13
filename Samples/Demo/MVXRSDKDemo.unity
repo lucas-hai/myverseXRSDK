@@ -822,7 +822,7 @@ MonoBehaviour:
   isEditing: 1
   isNewEntry: 0
   editingIndex: 0
-  hasUnsavedChanges: 1
+  hasUnsavedChanges: 0
   workingCopy:
     id: 4x6
     len: 6
