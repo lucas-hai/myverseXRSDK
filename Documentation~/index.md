@@ -2,7 +2,7 @@
 
 > 本文档面向接入方，讲"怎么用、为什么这么设计"。**字段级签名、完整参数表、错误码全清单等细节**统一交给 [API 参考手册](api-reference.md)，本文在需要时以"详见 API 文档"指引，不在正文堆砌签名表。
 >
-> 适用版本：MyVerse XR SDK **2.0.1**，命名空间 `MyVerseXRSDK`，包名 `com.myverse.xrsdk`。
+> 适用版本：MyVerse XR SDK **3.1+**，命名空间 `MyVerseXRSDK`，包名 `com.myverse.xrsdk`。
 
 ---
 
@@ -466,7 +466,7 @@ UnInit 是"反向 + 对称 + 幂等"的：卸载顺序与装配顺序相反、Sy
 
 ## 11. 版本与支持
 
-- **当前版本**：MyVerse XR SDK **3.1.4**（命名空间 `MyVerseXRSDK`）。
+- **当前版本**：MyVerse XR SDK **3.1.5**（命名空间 `MyVerseXRSDK`）。
 - **更新记录**：见 [CHANGELOG.md](../CHANGELOG.md)（含 v1.x → v2.x 及推流 v3 切镜化重构的 Migration Guide）。
 - **API 细节**：见 [API 参考手册](api-reference.md)。
 - **技术支持**：`support@myverse.com`。
