@@ -5,8 +5,9 @@ namespace MyVerseXRSDK
 {
     /// <summary>
     /// 运行时本地区域地块可视物：自发光（Unlit，不受场景光照/烘焙影响）半透明贴地矩形。
-    /// 由 RegionTileModule 实例化并挂在 XR 偏移节点下，按匹配地块的长宽/位姿显示。
-    /// 尺寸走 localScale（单位 quad ×(宽,1,长)），随地块热更新无需重建 mesh。
+    /// 由 RegionTileModule 实例化为独立场景根对象（DontDestroyOnLoad，跨场景常驻）：尺寸取匹配地块长宽，
+    /// 位置/旋转取区域对齐计算结果（与场景根节点同一世界位姿，设世界坐标）。
+    /// 尺寸走 localScale（单位 quad ×(宽,1,长)），随推送热更新无需重建 mesh。
     /// 自发光的意义：Unlit 不依赖 lightmap，第三方烘焙光工程里动态实例化也照常可见。
     /// 材质走包内预置 Resources 资产（<see cref="MaterialResourcesPath"/>）而非运行时 Shader.Find——
     /// 序列化引用强制 URP Unlit shader 进 build，规避第三方工程里 shader 被剥离导致地块不显示。
@@ -39,13 +40,17 @@ namespace MyVerseXRSDK
             if (m_Material != null) mr.sharedMaterial = m_Material;
         }
 
-        /// <summary>按地块长宽/位姿更新可视物（挂在 XR 偏移节点下，用地块 local 坐标）。</summary>
-        public void Apply(LocalRegionData tile)
+        /// <summary>
+        /// 按区域对齐计算结果更新可视物：position/eulerAngles 取自 <see cref="RegionAlignmentCalculator"/>
+        /// 的**世界位姿**（与场景根节点同一值），尺寸取自匹配地块长宽。
+        /// 设世界坐标 → 地块落到区域对齐后的物理位置（本对象为独立根对象，世界坐标即最终位姿）。
+        /// </summary>
+        public void Apply(Vector3 position, Vector3 eulerAngles, float width, float len)
         {
-            transform.localPosition    = tile.position;
-            transform.localEulerAngles = tile.rotation;
+            transform.position    = position;
+            transform.eulerAngles = eulerAngles;
             // 宽沿本地 X、长沿本地 Z（与编辑器底框、区域约定一致）
-            transform.localScale = new Vector3(Mathf.Abs(tile.width), 1f, Mathf.Abs(tile.len));
+            transform.localScale = new Vector3(Mathf.Abs(width), 1f, Mathf.Abs(len));
         }
 
         private void OnDestroy()

@@ -4,13 +4,13 @@ using UnityEngine;
 namespace MyVerseXRSDK
 {
     /// <summary>
-    /// 表现层：按 Region 快照的 ShowFloor 开关 + 匹配地块，在 XR 偏移节点下显示/隐藏自发光地块可视物。
+    /// 表现层：按 Region 快照的 ShowFloor 开关 + 匹配地块，以独立常驻对象显示/隐藏自发光地块可视物。
     /// </summary>
     /// <remarks>
-    /// 挂载父节点为 XR 偏移节点（与障碍物一致）：未注册时数据缓存、等注册回放；热替换移父复用、注销销毁。
+    /// 可视物是独立场景根对象（不挂 XR/根节点）+ DontDestroyOnLoad：区域是物理固定的，
+    /// 地块跨场景常驻、不随场景卸载删除。位姿取区域对齐计算结果（与场景根节点同一世界位姿），不依赖 XR 偏移节点。
     /// 地块匹配复用运行时临时 id（MakeRuntimeId），仅 ShowFloor=true 且命中本地地块条目时才显示；
-    /// ShowFloor=false / 无匹配 / 无 XR 节点均隐藏。显示是客户端渲染语义——服务端形态无 XR 节点自然不显示。
-    /// view 用 SetActive 复用（反复切换不重复建销毁），仅 UnInit / XR 注销时销毁。
+    /// ShowFloor=false / 无匹配均隐藏（SetActive 复用，不重复建销毁）。仅 UnInit 时销毁。
     /// </remarks>
     internal class RegionTileModule
     {
@@ -18,7 +18,7 @@ namespace MyVerseXRSDK
 
         private LocalRegionDataList m_DataList;
         private bool m_DataListLoadAttempted;
-        private RegionSnapshot? m_LastSnapshot;   // 晚注册（XR 节点后到）回放用
+        private RegionSnapshot? m_LastSnapshot;
         private RegionTileView m_View;
 
         /// <summary>测试注入点：覆盖地块列表加载方式（默认 Resources.Load 固定契约路径）。</summary>
@@ -31,16 +31,12 @@ namespace MyVerseXRSDK
 
         public void InitSDK()
         {
-            m_Store.OnRegionChanged            += OnRegionChanged;
-            MVXRSDK.OnXROffsetNodeRegistered   += OnXROffsetNodeRegistered;
-            MVXRSDK.OnXROffsetNodeUnregistered += OnXROffsetNodeUnregistered;
+            m_Store.OnRegionChanged += OnRegionChanged;
         }
 
         public void UnInitSDK()
         {
-            m_Store.OnRegionChanged            -= OnRegionChanged;
-            MVXRSDK.OnXROffsetNodeRegistered   -= OnXROffsetNodeRegistered;
-            MVXRSDK.OnXROffsetNodeUnregistered -= OnXROffsetNodeUnregistered;
+            m_Store.OnRegionChanged -= OnRegionChanged;
             DestroyView();
             m_LastSnapshot = null;
             m_DataList = null;
@@ -53,28 +49,8 @@ namespace MyVerseXRSDK
             Refresh();
         }
 
-        private void OnXROffsetNodeRegistered(Transform node)
-        {
-            // 热替换：view 若存活则移到新父节点复用（不销毁重建——避免帧内并存双份、绕开编辑器 Destroy 限制）；
-            // view 若已随旧 XR 子树被外部销毁，则由下方 Refresh→EnsureView 按当前快照重建到新节点
-            if (m_View != null && node != null)
-                m_View.transform.SetParent(node, false);
-            Refresh();
-        }
-
-        private void OnXROffsetNodeUnregistered()
-        {
-            DestroyView();
-        }
-
         private void Refresh()
         {
-            var parent = MVXRSDK.XROffsetNode;
-            if (parent == null)
-            {
-                MVXRSDKLog.Info("RegionTile.Refresh: XR 偏移节点未注册，地块暂不显示（等注册回放）");
-                return;
-            }
             if (!m_LastSnapshot.HasValue)
             {
                 MVXRSDKLog.Info("RegionTile.Refresh: 尚无 Region 快照，地块暂不显示");
@@ -100,24 +76,27 @@ namespace MyVerseXRSDK
                 return;
             }
 
-            EnsureView(parent);
+            EnsureView();
             if (m_View == null)
             {
                 MVXRSDKLog.Error("RegionTile.Refresh: 可视物创建失败（EnsureView 返回空）");
                 return;
             }
-            m_View.Apply(tile);
+            // 位置与旋转采用区域对齐计算结果（与场景根节点同一世界位姿），尺寸仍取地块长宽
+            var (position, eulerAngles) = RegionAlignmentCalculator.Compute(snapshot, tile);
+            m_View.Apply(position, eulerAngles, tile.width, tile.len);
             m_View.gameObject.SetActive(true);
-            MVXRSDKLog.Info($"RegionTile.Refresh: 显示地块 [{id}] 挂于 [{parent.name}]，" +
-                            $"本地pos={tile.position.ToString("F2")} 旋转={tile.rotation.ToString("F2")} " +
-                            $"尺寸(宽×长)=({tile.width}×{tile.len})，世界pos={m_View.transform.position.ToString("F2")}");
+            MVXRSDKLog.Info($"RegionTile.Refresh: 显示地块 [{id}]（跨场景常驻），" +
+                            $"世界位姿(取自区域计算)=pos {position.ToString("F2")} rot {eulerAngles.ToString("F2")}，" +
+                            $"尺寸(宽×长)=({tile.width}×{tile.len})");
         }
 
-        private void EnsureView(Transform parent)
+        // 可视物：独立场景根对象（不挂任何业务节点）+ 跳场景不删除，跨场景常驻标记物理区域
+        private void EnsureView()
         {
             if (m_View != null) return;
             var go = new GameObject("MVXR_RegionTileView");
-            go.transform.SetParent(parent, false);
+            if (Application.isPlaying) UnityEngine.Object.DontDestroyOnLoad(go);
             m_View = go.AddComponent<RegionTileView>();
         }
 
@@ -126,7 +105,7 @@ namespace MyVerseXRSDK
             if (m_View != null)
             {
                 var go = m_View.gameObject;
-                // 运行时用 Destroy（延迟到帧末）；编辑器下（含 EditMode 测试）Destroy 会报错，用 DestroyImmediate
+                // 运行时用 Destroy（延迟到帧末）；编辑器下（含 EditMode）Destroy 会报错，用 DestroyImmediate
                 if (Application.isPlaying) UnityEngine.Object.Destroy(go);
                 else UnityEngine.Object.DestroyImmediate(go);
             }
