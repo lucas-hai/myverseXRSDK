@@ -6,6 +6,17 @@
 
 ---
 
+## [3.2.0] - 2026-07-15
+
+### Added
+- **本地区域地块运行时显示**：Region 快照 `GameInfo.showFloor` 字段控制显隐——`true` 且远端长宽命中本地地块条目时，在已注册的 XR 偏移节点下显示一块**自发光半透明矩形**（尺寸=地块长×宽，位姿=地块 local 位姿）标出区域；`false`/无匹配/无 XR 节点则隐藏。可视物用 Unlit 材质（不吃场景光照/烘焙，第三方烘焙光工程动态实例化也可见），随推送实时切换（SetActive 复用），XR 节点热替换移父复用/注销销毁。新增 `RegionTileView`（可视物）+ `RegionTileModule`（生命周期），运行时构建 mesh；材质走包内预置 `Resources/MVXRSDK/RegionTileMaterial.mat`（URP Unlit 透明自发光）——序列化引用强制 shader 进 build，规避第三方工程 URP/Unlit 被剥离导致地块不显示（缺失时才退化到运行时 `Shader.Find`）
+- **Demo 增区域地块显隐入口**：`MVXRSDKDemo` 按 `F` 键（或 ContextMenu 显示/隐藏）本地注入 `RegionInfoPush` 模拟服务端推送切 `ShowFloor`，默认 len/width=6/6 命中仓库自带 `6x6` 条目；连服模式为本地模拟（服务端真推会覆盖），稳定验证可切 Offline
+
+### Fixed
+- **区域对齐改为世界层级刚体变换**（修正区域旋转下根节点错位）：旧公式逐分量加减（`center−地块position`、欧拉角逐分量相减），区域一旦带旋转就错位。改为层级模型——A=远端区域为父节点、B=游戏偏移为子节点、C=本地地块与 A 同级：先求 B 世界位姿 `rot = Rotate(区域rotation)·Rotate(gameOffsetRotation)`、`B.worldPos = center + Rotate(区域rotation)·gameOffset`，再对位置减去 C：`pos = B.worldPos − 地块position`。语义定型：`gameOffset/gameOffsetRotation`=**B 相对 A** 的偏移（被区域旋转带动）；地块 C **与 A 同级**，只有 `position` 参与、**世界层级直接相减不被区域旋转带动**，`rotation` 不参与对齐（仅影响可视物显示朝向）。计算结果是**世界位姿**，模块改赋 `transform.position/eulerAngles`（世界坐标，根节点有父物体时也正确）。`RegionInfo.offset/offsetRotation` 彻底废弃——已从 `RegionSnapshot` 结构与快照归一化中移除对应字段（PB 生成类仍保留字段供老客户端，SDK 不再读取）
+
+---
+
 ## [3.1.5] - 2026-07-14
 
 ### Added

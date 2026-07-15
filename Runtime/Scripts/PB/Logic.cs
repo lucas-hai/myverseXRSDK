@@ -109,37 +109,37 @@ public static partial class LogicReflection {
           "ZnlMaXZlEhYKDnN0cmVhbVNlcnZlcklwGAEgASgJEg0KBXN0YXJ0GAIgASgI",
           "EhAKCGRldmljZUlkGAMgASgJIlkKEExlYWRlcmJvYXJkRW50cnkSCgoCaWQY",
           "ASABKAkSDAoEcmFuaxgCIAEoBRIMCgRuYW1lGAMgASgJEg0KBXNjb3JlGAQg",
-          "ASgDEg4KBmF2YXRhchgFIAEoCSKJBQoOUmVnaW9uSW5mb1B1c2gSLgoKcmVn",
+          "ASgDEg4KBmF2YXRhchgFIAEoCSKcBQoOUmVnaW9uSW5mb1B1c2gSLgoKcmVn",
           "aW9uSW5mbxgBIAEoCzIaLlJlZ2lvbkluZm9QdXNoLlJlZ2lvbkluZm8SKgoI",
-          "Z2FtZUluZm8YAiABKAsyGC5SZWdpb25JbmZvUHVzaC5HYW1lSW5mbxqFAQoI",
+          "Z2FtZUluZm8YAiABKAsyGC5SZWdpb25JbmZvUHVzaC5HYW1lSW5mbxqYAQoI",
           "R2FtZUluZm8SKgoKZ2FtZU9mZnNldBgBIAEoCzIWLlJlZ2lvbkluZm9QdXNo",
           "Lk9mZnNldBI6ChJnYW1lT2Zmc2V0Um90YXRpb24YAiABKAsyHi5SZWdpb25J",
-          "bmZvUHVzaC5PZmZzZXRSb3RhdGlvbhIRCglmbG9vck5hbWUYAyABKAka3AEK",
-          "ClJlZ2lvbkluZm8SCwoDbGVuGAEgASgCEg0KBXdpZHRoGAIgASgCEiYKBmNl",
-          "bnRlchgDIAEoCzIWLlJlZ2lvbkluZm9QdXNoLkNlbnRlchImCgZvZmZzZXQY",
-          "BCABKAsyFi5SZWdpb25JbmZvUHVzaC5PZmZzZXQSNgoOb2Zmc2V0Um90YXRp",
-          "b24YBSABKAsyHi5SZWdpb25JbmZvUHVzaC5PZmZzZXRSb3RhdGlvbhIqCghy",
-          "b3RhdGlvbhgGIAEoCzIYLlJlZ2lvbkluZm9QdXNoLlJvdGF0aW9uGikKBkNl",
-          "bnRlchIJCgF4GAEgASgCEgkKAXkYAiABKAISCQoBehgDIAEoAhopCgZPZmZz",
-          "ZXQSCQoBeBgBIAEoAhIJCgF5GAIgASgCEgkKAXoYAyABKAIaMQoOT2Zmc2V0",
-          "Um90YXRpb24SCQoBeBgBIAEoAhIJCgF5GAIgASgCEgkKAXoYAyABKAIaKwoI",
-          "Um90YXRpb24SCQoBeBgBIAEoAhIJCgF5GAIgASgCEgkKAXoYAyABKAIiRAoP",
-          "TGVhZGVyYm9hcmREYXRhEg0KBXRpdGxlGAEgASgJEiIKB2VudHJpZXMYAiAD",
-          "KAsyES5MZWFkZXJib2FyZEVudHJ5IpkBCgxEZXZpY2VSZXBvcnQabAoHUmVx",
-          "dWVzdBIKCgJvcBgBIAEoCRIQCghkZXZpY2VJZBgCIAEoCRIOCgZyb29tSWQY",
-          "AyABKAkSEwoLZHVyYXRpb25TZWMYBCABKAUSHgoEZGF0YRgFIAEoCzIQLkxl",
-          "YWRlcmJvYXJkRGF0YRobCghSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIIo8B",
-          "Cg5EaXJlY3Rvckluc2VydBpgCgdSZXF1ZXN0Eg4KBmxlbnNlcxgBIAEoBRIT",
-          "CgtkdXJhdGlvblNlYxgCIAEoBRIOCgZzb3VyY2UYAyABKAkSDgoGcmVjb3Jk",
-          "GAQgASgIEhAKCGZpbGVOYW1lGAUgASgJGhsKCFJlc3BvbnNlEg8KB3N1Y2Nl",
-          "c3MYASABKAgiWgoQRGlyZWN0b3JTZWxlY3RlZBIQCghkZXZpY2VJZBgBIAEo",
-          "CRIRCglpc1ByaW1hcnkYAiABKAgSDAoEc2xvdBgDIAEoBRITCgtkdXJhdGlv",
-          "blNlYxgEIAEoBSImChJEaXJlY3RvckRlc2VsZWN0ZWQSEAoIZGV2aWNlSWQY",
-          "ASABKAkilQEKC1N0YXJ0UmVjb3JkGmkKB1JlcXVlc3QSEgoKcmVhbENhbWVy",
-          "YRgBIAEoCBIQCghjYW1lcmFJZBgCIAEoCRIQCghkdXJhdGlvbhgDIAEoBRIQ",
-          "CghmaWxlTmFtZRgEIAEoCRIUCgxwaWNvRGV2aWNlSWQYBSABKAkaGwoIUmVz",
-          "cG9uc2USDwoHc3VjY2VzcxgBIAEoCEIlWiMuL2xvZ2ljL2dlbmVyYXRlZC9s",
-          "b2dpY19wYjtsb2dpY19wYmIGcHJvdG8z"));
+          "bmZvUHVzaC5PZmZzZXRSb3RhdGlvbhIRCglmbG9vck5hbWUYAyABKAkSEQoJ",
+          "c2hvd0Zsb29yGAQgASgIGtwBCgpSZWdpb25JbmZvEgsKA2xlbhgBIAEoAhIN",
+          "CgV3aWR0aBgCIAEoAhImCgZjZW50ZXIYAyABKAsyFi5SZWdpb25JbmZvUHVz",
+          "aC5DZW50ZXISJgoGb2Zmc2V0GAQgASgLMhYuUmVnaW9uSW5mb1B1c2guT2Zm",
+          "c2V0EjYKDm9mZnNldFJvdGF0aW9uGAUgASgLMh4uUmVnaW9uSW5mb1B1c2gu",
+          "T2Zmc2V0Um90YXRpb24SKgoIcm90YXRpb24YBiABKAsyGC5SZWdpb25JbmZv",
+          "UHVzaC5Sb3RhdGlvbhopCgZDZW50ZXISCQoBeBgBIAEoAhIJCgF5GAIgASgC",
+          "EgkKAXoYAyABKAIaKQoGT2Zmc2V0EgkKAXgYASABKAISCQoBeRgCIAEoAhIJ",
+          "CgF6GAMgASgCGjEKDk9mZnNldFJvdGF0aW9uEgkKAXgYASABKAISCQoBeRgC",
+          "IAEoAhIJCgF6GAMgASgCGisKCFJvdGF0aW9uEgkKAXgYASABKAISCQoBeRgC",
+          "IAEoAhIJCgF6GAMgASgCIkQKD0xlYWRlcmJvYXJkRGF0YRINCgV0aXRsZRgB",
+          "IAEoCRIiCgdlbnRyaWVzGAIgAygLMhEuTGVhZGVyYm9hcmRFbnRyeSKZAQoM",
+          "RGV2aWNlUmVwb3J0GmwKB1JlcXVlc3QSCgoCb3AYASABKAkSEAoIZGV2aWNl",
+          "SWQYAiABKAkSDgoGcm9vbUlkGAMgASgJEhMKC2R1cmF0aW9uU2VjGAQgASgF",
+          "Eh4KBGRhdGEYBSABKAsyEC5MZWFkZXJib2FyZERhdGEaGwoIUmVzcG9uc2US",
+          "DwoHc3VjY2VzcxgBIAEoCCKPAQoORGlyZWN0b3JJbnNlcnQaYAoHUmVxdWVz",
+          "dBIOCgZsZW5zZXMYASABKAUSEwoLZHVyYXRpb25TZWMYAiABKAUSDgoGc291",
+          "cmNlGAMgASgJEg4KBnJlY29yZBgEIAEoCBIQCghmaWxlTmFtZRgFIAEoCRob",
+          "CghSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIIloKEERpcmVjdG9yU2VsZWN0",
+          "ZWQSEAoIZGV2aWNlSWQYASABKAkSEQoJaXNQcmltYXJ5GAIgASgIEgwKBHNs",
+          "b3QYAyABKAUSEwoLZHVyYXRpb25TZWMYBCABKAUiJgoSRGlyZWN0b3JEZXNl",
+          "bGVjdGVkEhAKCGRldmljZUlkGAEgASgJIpUBCgtTdGFydFJlY29yZBppCgdS",
+          "ZXF1ZXN0EhIKCnJlYWxDYW1lcmEYASABKAgSEAoIY2FtZXJhSWQYAiABKAkS",
+          "EAoIZHVyYXRpb24YAyABKAUSEAoIZmlsZU5hbWUYBCABKAkSFAoMcGljb0Rl",
+          "dmljZUlkGAUgASgJGhsKCFJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAhCJVoj",
+          "Li9sb2dpYy9nZW5lcmF0ZWQvbG9naWNfcGI7bG9naWNfcGJiBnByb3RvMw=="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
@@ -190,7 +190,7 @@ public static partial class LogicReflection {
           new pbr::GeneratedClrTypeInfo(typeof(global::UpdateDeviceOnlineStatus.Types.Response), global::UpdateDeviceOnlineStatus.Types.Response.Parser, new[]{ "Success" }, null, null, null, null)}),
           new pbr::GeneratedClrTypeInfo(typeof(global::NotifyLive), global::NotifyLive.Parser, new[]{ "StreamServerIp", "Start", "DeviceId" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::LeaderboardEntry), global::LeaderboardEntry.Parser, new[]{ "Id", "Rank", "Name", "Score", "Avatar" }, null, null, null, null),
-          new pbr::GeneratedClrTypeInfo(typeof(global::RegionInfoPush), global::RegionInfoPush.Parser, new[]{ "RegionInfo", "GameInfo" }, null, null, null, new pbr::GeneratedClrTypeInfo[] { new pbr::GeneratedClrTypeInfo(typeof(global::RegionInfoPush.Types.GameInfo), global::RegionInfoPush.Types.GameInfo.Parser, new[]{ "GameOffset", "GameOffsetRotation", "FloorName" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::RegionInfoPush), global::RegionInfoPush.Parser, new[]{ "RegionInfo", "GameInfo" }, null, null, null, new pbr::GeneratedClrTypeInfo[] { new pbr::GeneratedClrTypeInfo(typeof(global::RegionInfoPush.Types.GameInfo), global::RegionInfoPush.Types.GameInfo.Parser, new[]{ "GameOffset", "GameOffsetRotation", "FloorName", "ShowFloor" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::RegionInfoPush.Types.RegionInfo), global::RegionInfoPush.Types.RegionInfo.Parser, new[]{ "Len", "Width", "Center", "Offset", "OffsetRotation", "Rotation" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::RegionInfoPush.Types.Center), global::RegionInfoPush.Types.Center.Parser, new[]{ "X", "Y", "Z" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::RegionInfoPush.Types.Offset), global::RegionInfoPush.Types.Offset.Parser, new[]{ "X", "Y", "Z" }, null, null, null, null),
@@ -11033,6 +11033,7 @@ public sealed partial class RegionInfoPush : pb::IMessage<RegionInfoPush> {
         gameOffset_ = other.gameOffset_ != null ? other.gameOffset_.Clone() : null;
         gameOffsetRotation_ = other.gameOffsetRotation_ != null ? other.gameOffsetRotation_.Clone() : null;
         floorName_ = other.floorName_;
+        showFloor_ = other.showFloor_;
         _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
       }
 
@@ -11083,6 +11084,20 @@ public sealed partial class RegionInfoPush : pb::IMessage<RegionInfoPush> {
         }
       }
 
+      /// <summary>Field number for the "showFloor" field.</summary>
+      public const int ShowFloorFieldNumber = 4;
+      private bool showFloor_;
+      /// <summary>
+      ///游戏中是否显示地块
+      /// </summary>
+      [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+      public bool ShowFloor {
+        get { return showFloor_; }
+        set {
+          showFloor_ = value;
+        }
+      }
+
       [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
       public override bool Equals(object other) {
         return Equals(other as GameInfo);
@@ -11099,6 +11114,7 @@ public sealed partial class RegionInfoPush : pb::IMessage<RegionInfoPush> {
         if (!object.Equals(GameOffset, other.GameOffset)) return false;
         if (!object.Equals(GameOffsetRotation, other.GameOffsetRotation)) return false;
         if (FloorName != other.FloorName) return false;
+        if (ShowFloor != other.ShowFloor) return false;
         return Equals(_unknownFields, other._unknownFields);
       }
 
@@ -11108,6 +11124,7 @@ public sealed partial class RegionInfoPush : pb::IMessage<RegionInfoPush> {
         if (gameOffset_ != null) hash ^= GameOffset.GetHashCode();
         if (gameOffsetRotation_ != null) hash ^= GameOffsetRotation.GetHashCode();
         if (FloorName.Length != 0) hash ^= FloorName.GetHashCode();
+        if (ShowFloor != false) hash ^= ShowFloor.GetHashCode();
         if (_unknownFields != null) {
           hash ^= _unknownFields.GetHashCode();
         }
@@ -11133,6 +11150,10 @@ public sealed partial class RegionInfoPush : pb::IMessage<RegionInfoPush> {
           output.WriteRawTag(26);
           output.WriteString(FloorName);
         }
+        if (ShowFloor != false) {
+          output.WriteRawTag(32);
+          output.WriteBool(ShowFloor);
+        }
         if (_unknownFields != null) {
           _unknownFields.WriteTo(output);
         }
@@ -11149,6 +11170,9 @@ public sealed partial class RegionInfoPush : pb::IMessage<RegionInfoPush> {
         }
         if (FloorName.Length != 0) {
           size += 1 + pb::CodedOutputStream.ComputeStringSize(FloorName);
+        }
+        if (ShowFloor != false) {
+          size += 1 + 1;
         }
         if (_unknownFields != null) {
           size += _unknownFields.CalculateSize();
@@ -11175,6 +11199,9 @@ public sealed partial class RegionInfoPush : pb::IMessage<RegionInfoPush> {
         }
         if (other.FloorName.Length != 0) {
           FloorName = other.FloorName;
+        }
+        if (other.ShowFloor != false) {
+          ShowFloor = other.ShowFloor;
         }
         _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
       }
@@ -11203,6 +11230,10 @@ public sealed partial class RegionInfoPush : pb::IMessage<RegionInfoPush> {
             }
             case 26: {
               FloorName = input.ReadString();
+              break;
+            }
+            case 32: {
+              ShowFloor = input.ReadBool();
               break;
             }
           }

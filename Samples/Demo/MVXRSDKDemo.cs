@@ -18,6 +18,8 @@ using UnityEngine;
 /// 9. 反初始化：UnInitMVXRSDK 释放全部资源，可二次 Init
 /// 10. Editor Debug：Debug_SimulateNotifyLive 在 Editor 内绕过 WS 仿真推流通知（Offline / WsDirect 都能跑）
 /// 11. 同房间虚影同步：SetSyncSameRoomAvatar 开关，按键切换是否同步同房间其他玩家虚影（默认关）
+/// 12. 区域地块显隐：本地注入 RegionInfoPush（GameInfo.ShowFloor）模拟服务端推送，按 F 切显隐；
+///     地块自发光可视物挂在已注册 XR 偏移节点下，id=宽x长 命中 Resources/MVXRSDK/LocalRegionData 才显示
 ///
 /// 挂法：同 GameObject 上同时挂本组件 + <see cref="MVXRStreamRig"/>。
 /// Inspector 字段：xrOffsetNode / selfNode / rootNodes 拖入场景对应节点；
@@ -114,6 +116,22 @@ public sealed class MVXRSDKDemo : MonoBehaviour
              "二选一即可——两条路径独立但都会触发同一份业务逻辑。")]
     public bool autoVerifyOnConnected = false;
 
+    [Header("区域地块显隐（本地注入模拟服务端推送；按 F 切显隐 / ContextMenu）")]
+    [Tooltip("地块 id = 宽x长 取整绝对值。默认 6/6 → id \"6x6\"，必须与 Resources/MVXRSDK/LocalRegionData.asset 里的条目匹配才会显示。\n" +
+             "连服模式(WsDirect/Production)下这是本地注入模拟——服务端下一次真实推送会覆盖它；要稳定本地验证可把 initMode 设 Offline。\n" +
+             "地块可视物挂在已注册的 XR 偏移节点下（未注册则不显示）。")]
+    public float regionLen = 6f;
+    public float regionWidth = 6f;
+
+    [Tooltip("仿真区域中心/旋转/游戏偏移：喂给区域对齐公式驱动根节点位姿。只为演示，值可任意。")]
+    public Vector3 regionCenter = new Vector3(10f, 0f, 20f);
+    public Vector3 regionRotation = new Vector3(0f, 30f, 0f);
+    public Vector3 regionGameOffset = new Vector3(0.5f, 0f, -0.5f);
+    public Vector3 regionGameOffsetRotation = new Vector3(0f, 15f, 0f);
+
+    [Tooltip("地块显隐开关（GameInfo.ShowFloor）。按 F 键在此值上翻转并重推。")]
+    public bool regionShowFloor = true;
+
     [Header("状态打印")]
     [Tooltip("0 表示不周期打；>0 则每 N 秒打一次 State / IsReady / IsConnected。")]
     public float printStatePeriodSec = 5f;
@@ -130,6 +148,8 @@ public sealed class MVXRSDKDemo : MonoBehaviour
     public KeyCode unRegisterSelfKey = KeyCode.Y;
     [Tooltip("切换是否同步同房间其他玩家虚影（MVXRSDK.SetSyncSameRoomAvatar）。")]
     public KeyCode syncSameRoomAvatarKey = KeyCode.M;
+    [Tooltip("本地注入区域快照并翻转 ShowFloor（模拟服务端推送地块显隐）。")]
+    public KeyCode regionFloorKey = KeyCode.F;
 
     [Header("热替换/注销演示（用作 X / Y 键的目标）")]
     [Tooltip("按 X 时把 XR Offset Node 热替换为这个节点（演示 v2 任意时机注册 + 热替换）。")]
@@ -209,6 +229,7 @@ public sealed class MVXRSDKDemo : MonoBehaviour
         if (Input.GetKeyDown(hotSwapXROffsetKey))    DoHotSwapXROffset();
         if (Input.GetKeyDown(unRegisterSelfKey))     DoUnRegisterSelf();
         if (Input.GetKeyDown(syncSameRoomAvatarKey)) DoToggleSyncSameRoomAvatar();
+        if (Input.GetKeyDown(regionFloorKey))        DoToggleRegionFloor();
 
         // 状态机周期打印
         if (printStatePeriodSec > 0f && Time.unscaledTime >= m_NextStatePrintTime)
@@ -448,5 +469,62 @@ public sealed class MVXRSDKDemo : MonoBehaviour
         MVXRSDK.SetSyncSameRoomAvatar(next, sameRoomAvatarDistance);
         syncSameRoomAvatar = next;   // 同步 Inspector 显示
         Debug.Log($"[MVXRSDKDemo] SetSyncSameRoomAvatar({next}, {sameRoomAvatarDistance}m) —— 同房间虚影同步{(next ? "已开启" : "已关闭")}");
+    }
+
+    // ============================== 区域地块显隐（本地注入模拟服务端推送） ==============================
+
+    [ContextMenu("区域地块：显示（注入 ShowFloor=true）")]
+    public void DoShowRegionFloor()
+    {
+        regionShowFloor = true;
+        InjectRegionSnapshot();
+    }
+
+    [ContextMenu("区域地块：隐藏（注入 ShowFloor=false）")]
+    public void DoHideRegionFloor()
+    {
+        regionShowFloor = false;
+        InjectRegionSnapshot();
+    }
+
+    // 按键：在当前 ShowFloor 值上翻转并重推，便于设备上反复切显隐观察
+    private void DoToggleRegionFloor()
+    {
+        regionShowFloor = !regionShowFloor;
+        InjectRegionSnapshot();
+    }
+
+    // 构造区域快照并注入。地块可视物挂在已注册 XR 偏移节点下：ShowFloor=true 且 regionLen/Width 命中本地条目才显示。
+    // 注意：注入同时会驱动已注册根节点位姿（区域对齐公式的固有行为），不只是切地块。
+    private void InjectRegionSnapshot()
+    {
+        if (!MVXRSDK.IsReady)
+        {
+            Debug.LogWarning("[MVXRSDKDemo] 区域地块注入被忽略：SDK 未就绪，请先 Init（Offline 即可）");
+            return;
+        }
+        MVXRSDK.ApplyRegionInfo(BuildRegionPush(regionLen, regionWidth, regionShowFloor));
+        Debug.Log($"[MVXRSDKDemo] 已注入区域快照 len={regionLen} width={regionWidth} ShowFloor={regionShowFloor}" +
+                  "（地块需 id=宽x长 命中 LocalRegionData 才显示）");
+    }
+
+    private RegionInfoPush BuildRegionPush(float len, float width, bool showFloor)
+    {
+        return new RegionInfoPush
+        {
+            RegionInfo = new RegionInfoPush.Types.RegionInfo
+            {
+                Len = len,
+                Width = width,
+                Center = new RegionInfoPush.Types.Center { X = regionCenter.x, Y = regionCenter.y, Z = regionCenter.z },
+                Rotation = new RegionInfoPush.Types.Rotation { X = regionRotation.x, Y = regionRotation.y, Z = regionRotation.z },
+            },
+            GameInfo = new RegionInfoPush.Types.GameInfo
+            {
+                GameOffset = new RegionInfoPush.Types.Offset { X = regionGameOffset.x, Y = regionGameOffset.y, Z = regionGameOffset.z },
+                GameOffsetRotation = new RegionInfoPush.Types.OffsetRotation { X = regionGameOffsetRotation.x, Y = regionGameOffsetRotation.y, Z = regionGameOffsetRotation.z },
+                ShowFloor = showFloor,
+            },
+        };
     }
 }

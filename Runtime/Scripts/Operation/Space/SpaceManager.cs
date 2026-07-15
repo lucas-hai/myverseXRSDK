@@ -10,6 +10,7 @@ namespace MyVerseXRSDK
         private static SpaceStateStore           m_Store;
         private static SpaceObstaclesModule      m_SpaceObstacles;
         private static SpatialAlternationModule  m_SpatialAlternation;
+        private static RegionTileModule          m_RegionTile;
         private static bool                      s_Initialized;
 
         public static void Start()
@@ -17,6 +18,7 @@ namespace MyVerseXRSDK
             m_Store              = new SpaceStateStore();
             m_SpatialAlternation = new SpatialAlternationModule(m_Store);
             m_SpaceObstacles     = new SpaceObstaclesModule(m_Store);
+            m_RegionTile         = new RegionTileModule(m_Store);
         }
 
         public static void InitSDK()
@@ -25,6 +27,7 @@ namespace MyVerseXRSDK
             AddEvent();
             m_SpaceObstacles.InitSDK();
             m_SpatialAlternation.InitSDK();
+            m_RegionTile.InitSDK();
             s_Initialized = true;
         }
 
@@ -34,6 +37,7 @@ namespace MyVerseXRSDK
             RemoveEvent();
             m_SpaceObstacles.UnInitSDK();
             m_SpatialAlternation.UnInitSDK();
+            m_RegionTile.UnInitSDK();
             m_Store.Clear();
             s_Initialized = false;
         }

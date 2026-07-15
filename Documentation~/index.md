@@ -198,15 +198,21 @@ NotInitialized → Initializing → LocalReady → Connecting → Connected
 
 #### 场景根节点驱动（Region 体系，唯一驱动源）
 
-- 登录响应 `regionInfo` 携带首帧 + 运行中 `RegionInfoPush` 变更推送（全量快照覆盖）。SDK 用远端实际长宽生成临时 id（**取绝对值后截断取整**，不四舍五入，按远端 tagId 形态拼 `宽x长`、小写 x，如 `len:12.35, width:6.18` → `6x12`）匹配本地地块条目（地块编辑器产出，见 §12.2），按区域公式驱动根节点：
+- 登录响应 `regionInfo` 携带首帧 + 运行中 `RegionInfoPush` 变更推送（全量快照覆盖）。SDK 用远端实际长宽生成临时 id（**取绝对值后截断取整**，不四舍五入，按远端 tagId 形态拼 `宽x长`、小写 x，如 `len:12.35, width:6.18` → `6x12`）匹配本地地块条目（地块编辑器产出，见 §12.2），按层级刚体变换驱动根节点（世界位姿）——A=远端区域为父节点、B=游戏偏移为子节点、C=本地地块与 A 同级：
   ```
-  基础位置 = 区域center − 地块position + 区域offset          （逐分量）
-  基础旋转 = 区域rotation − 地块rotation + 区域offsetRotation （欧拉角逐分量）
-  最终位姿 = 基础 + gameOffset / gameOffsetRotation           （游戏偏移为相对基础的总偏移，幂等）
+  rot = Rotate(区域rotation) · Rotate(gameOffsetRotation)             （B 相对 A 的世界旋转，四元数组合；地块rotation 不参与）
+  pos = 区域center + Rotate(区域rotation)·gameOffset − 地块position     （先求 B 世界位置，再减 C）
   ```
+  语义：`center/rotation` 是区域 A 自身位姿；`gameOffset/gameOffsetRotation` 是 **B 相对 A** 的偏移（B 是 A 的子节点，**被 A 旋转带动**）；地块=**本地区域 C，与 A 同级**（世界层级），只有 `position` 参与、且**不被 A 旋转带动**（世界层级直接相减），`rotation` 不参与。计算结果是**世界位姿**，赋给场景根节点。`RegionInfo.offset/offsetRotation` 已废弃，不参与计算。
   匹配不到地块 / 未提供 `Resources/MVXRSDK/LocalRegionData` 资产时根节点保持原位并告警。仅登录首帧或长宽变化时重查地块，纯游戏偏移变更复用缓存。
 - **旧 `GameScenePush` 的 Offset/Rotation 根节点偏移功能已废弃**：新版客户端不解析（后端为老版本客户端保留字段）；未接入 Region 的房间（`regionInfo` 为空）根节点不偏移。障碍物同步（SceneData）不受影响，注册接口 `RegisterRootNode` 系列不变。
 - Offline 模式无网络阶段，SDK 不会自行收到 Region 推送；可配合下述注入接口使用（服务端形态）。
+
+#### 本地区域地块显示（自发光可视物）
+
+- Region 快照的 `GameInfo.showFloor` 字段控制**是否显示本地区域地块**：`true` 且远端长宽命中本地地块条目时，SDK 在**已注册的 XR 偏移节点下**实例化一块自发光半透明矩形（尺寸 = 地块 长×宽，位姿 = 地块 local position/rotation），标出该区域；`false` / 无匹配地块 / 未注册 XR 偏移节点均不显示。
+- **自发光**：可视物用 Unlit 材质（不受场景光照 / 烘焙影响），第三方工程即使用烘焙光（lightmap），运行时动态实例化的地块也照常可见——这是"自带光"的技术含义（自发光 ≠ 依赖 lightmap，而非加 Light 照亮环境）。
+- 显隐随推送实时切换（可视物复用 `SetActive`，不反复建销毁）；XR 偏移节点热替换时重建、注销时销毁。**仅客户端渲染语义**——服务端形态（SDK 在服务端跑、无 XR 偏移节点）自然不显示，若游戏客户端需要显示地块由业务在客户端侧自行呈现。
 
 #### 服务端形态（宿主自持中控连接）
 
@@ -499,7 +505,7 @@ Editor 工具链的远端能力（区域规格列表拉取、地块数据上传�
 5. 点"保存"：数据先上传远端（`POST /api/region/block`），成功后才写入本地资产；失败会报错且不保存，可修改后重试。注意后端当前为追加插入，同一 id 重复保存会在服务端累积多条记录。
 6. 删除条目仅删本地，不同步远端。
 
-注意：地片建议尽量放在原点附近、保持零旋转——区域对齐公式为逐分量算术，地片带旋转且偏离原点时不做刚体修正。
+注意：区域对齐是**世界层级刚体变换**（A=区域为父、B=游戏偏移为子、C=地块与 A 同级）。游戏偏移 `gameOffset`（B 相对 A）会被区域旋转带动；地片 `position`（C 与 A 同级）是**世界层级直接相减、不被区域旋转带动**。地片 `rotation` **不参与根节点对齐**（只影响地块可视物显示朝向）；若希望根节点朝向随之改变，用远端 `gameOffsetRotation`。
 
 ---
 

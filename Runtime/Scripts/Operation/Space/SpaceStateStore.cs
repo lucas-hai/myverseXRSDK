@@ -46,13 +46,13 @@ namespace MyVerseXRSDK
             }
 
             var region = push.RegionInfo;
-            var center         = region.Center         == null ? Vector3.zero : new Vector3(region.Center.X, region.Center.Y, region.Center.Z);
-            var offset         = region.Offset         == null ? Vector3.zero : new Vector3(region.Offset.X, region.Offset.Y, region.Offset.Z);
-            var offsetRotation = region.OffsetRotation == null ? Vector3.zero : new Vector3(region.OffsetRotation.X, region.OffsetRotation.Y, region.OffsetRotation.Z);
-            var rotation       = region.Rotation       == null ? Vector3.zero : new Vector3(region.Rotation.X, region.Rotation.Y, region.Rotation.Z);
+            // RegionInfo.offset/offsetRotation 已废弃，不再读入（PB 仍保留字段供老客户端）
+            var center   = region.Center   == null ? Vector3.zero : new Vector3(region.Center.X, region.Center.Y, region.Center.Z);
+            var rotation = region.Rotation == null ? Vector3.zero : new Vector3(region.Rotation.X, region.Rotation.Y, region.Rotation.Z);
 
             var gameOffset         = Vector3.zero;
             var gameOffsetRotation = Vector3.zero;
+            var showFloor          = false;
             var game = push.GameInfo;
             if (game != null)
             {
@@ -60,10 +60,11 @@ namespace MyVerseXRSDK
                     gameOffset = new Vector3(game.GameOffset.X, game.GameOffset.Y, game.GameOffset.Z);
                 if (game.GameOffsetRotation != null)
                     gameOffsetRotation = new Vector3(game.GameOffsetRotation.X, game.GameOffsetRotation.Y, game.GameOffsetRotation.Z);
+                showFloor = game.ShowFloor;
             }
 
-            var snapshot = new RegionSnapshot(region.Len, region.Width, center, offset, offsetRotation,
-                                              rotation, gameOffset, gameOffsetRotation);
+            var snapshot = new RegionSnapshot(region.Len, region.Width, center, rotation,
+                                              gameOffset, gameOffsetRotation, showFloor);
             LatestRegion = snapshot;
             SafeInvokeRegion(OnRegionChanged, snapshot, nameof(OnRegionChanged));
         }

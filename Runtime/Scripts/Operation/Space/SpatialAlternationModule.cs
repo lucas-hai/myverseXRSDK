@@ -64,13 +64,14 @@ namespace MyVerseXRSDK
             MVXRSDKLog.Info($"RegisterSceneRootNode: 注册成功，当前数量 {m_SceneRootNodes.Count}");
 
             // 回放：已有 Region 计算结果时立即对新节点应用一次（不影响其它已注册节点）
+            // 计算结果是世界位姿，赋给世界坐标（node.position/eulerAngles），根节点有父物体时也正确
             if (m_LastComputedPos.HasValue)
             {
-                MVXRSDKLog.Info($"场景根节点 [{node.name}] 应用缓存 Region 位姿: " +
-                                $"pos {node.localPosition.ToString("F3")} → {m_LastComputedPos.Value.ToString("F3")}, " +
-                                $"rot {node.localEulerAngles.ToString("F3")} → {m_LastComputedRot.ToString("F3")}");
-                node.localPosition    = m_LastComputedPos.Value;
-                node.localEulerAngles = m_LastComputedRot;
+                MVXRSDKLog.Info($"场景根节点 [{node.name}] 应用缓存 Region 世界位姿: " +
+                                $"pos {node.position.ToString("F3")} → {m_LastComputedPos.Value.ToString("F3")}, " +
+                                $"rot {node.eulerAngles.ToString("F3")} → {m_LastComputedRot.ToString("F3")}");
+                node.position    = m_LastComputedPos.Value;
+                node.eulerAngles = m_LastComputedRot;
             }
         }
 
@@ -104,8 +105,7 @@ namespace MyVerseXRSDK
             // 联调可观测：远端快照全量字段（区域位姿 + 空间对齐偏移 + 游戏偏移），无匹配时也打印
             MVXRSDKLog.Info($"Region 快照到达[{runtimeId}]: 长宽=({snapshot.Len}, {snapshot.Width}), " +
                             $"区域 center={snapshot.Center.ToString("F3")} rotation={snapshot.Rotation.ToString("F3")}, " +
-                            $"偏移 offset={snapshot.Offset.ToString("F3")} offsetRotation={snapshot.OffsetRotation.ToString("F3")}, " +
-                            $"游戏偏移 gameOffset={snapshot.GameOffset.ToString("F3")} gameOffsetRotation={snapshot.GameOffsetRotation.ToString("F3")}");
+                            $"游戏偏移(B相对A) gameOffset={snapshot.GameOffset.ToString("F3")} gameOffsetRotation={snapshot.GameOffsetRotation.ToString("F3")}");
             // 仅登录首帧或长宽（临时 id）变化时重查地片；纯 gameOffset 变更复用缓存
             if (m_MatchedTile == null || !string.Equals(runtimeId, m_LastRuntimeId, StringComparison.Ordinal))
             {
@@ -179,12 +179,12 @@ namespace MyVerseXRSDK
                     m_SceneRootNodes.RemoveAt(i);
                     continue;
                 }
-                // 打印该场景根节点位置更新前 → 更新后的坐标
-                MVXRSDKLog.Info($"场景根节点 [{n.name}] 位置更新({sourceTag}): " +
-                                $"pos {n.localPosition.ToString("F3")} → {position.ToString("F3")}, " +
-                                $"rot {n.localEulerAngles.ToString("F3")} → {eulerAngles.ToString("F3")}");
-                n.localPosition    = position;
-                n.localEulerAngles = eulerAngles;
+                // 计算结果是世界位姿，赋给世界坐标（n.position/eulerAngles），根节点有父物体时也正确
+                MVXRSDKLog.Info($"场景根节点 [{n.name}] 世界位姿更新({sourceTag}): " +
+                                $"pos {n.position.ToString("F3")} → {position.ToString("F3")}, " +
+                                $"rot {n.eulerAngles.ToString("F3")} → {eulerAngles.ToString("F3")}");
+                n.position    = position;
+                n.eulerAngles = eulerAngles;
             }
         }
 
