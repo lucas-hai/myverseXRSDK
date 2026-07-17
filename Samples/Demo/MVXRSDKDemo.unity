@@ -1135,16 +1135,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   dataList: {fileID: 11400000, guid: 2b9429334747baa43bdd8199d53bf143, type: 2}
   alwaysShowTiles: 1
-  isEditing: 1
+  isEditing: 0
   isNewEntry: 0
-  editingIndex: 0
+  editingIndex: -1
   hasUnsavedChanges: 0
   workingCopy:
-    id: 6x6
-    len: 6
-    width: 6
+    id: 5x5
+    len: 5
+    width: 5
     position: {x: 0, y: 0, z: 0}
     rotation: {x: 0, y: 0, z: 0}
+  editingEnv: 1
 --- !u!4 &1180180223
 Transform:
   m_ObjectHideFlags: 0
@@ -1548,8 +1549,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   initMode: 1
-  deviceId: bqc1
-  controlServerAddress: http://192.168.1.157:7015
+  deviceId: luohai1
+  controlServerAddress: http://192.168.1.205:7015
   initOnStart: 1
   xrOffsetNode: {fileID: 794924890}
   selfNode: {fileID: 420374101}
