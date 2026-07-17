@@ -23,6 +23,7 @@ namespace MyVerseXRSDK.Editor
         private System.Collections.Generic.List<RegionSpec> m_PendingSpecs;    // 异步拉回、待在 OnGUI 内弹出的规格
         private bool m_Uploading;                                              // 地块上传在途（冻结全部交互）
         private Vector2 m_EntryListScroll;
+        private Rect m_CreateButtonRect;                                       // "创建新条目"按钮 rect（规格弹窗锚点）
 
         // 帧内环境缓存：SdkAuthStore.ActiveEnvironment 每次查 AssetDatabase，OnInspectorGUI 一帧引用多次，
         // 开头取一次即可；按钮回调都在 OnInspectorGUI 栈内执行，读该字段同样有效（OnSceneGUI 不用环境）
@@ -66,13 +67,12 @@ namespace MyVerseXRSDK.Editor
                 RegionDataMigration.SyncActiveEnvironment(Target.dataList, m_EnvThisFrame);
                 DrawAssetPathWarning();
                 DrawToolbar();
-                // 异步拉回的规格列表转到 OnGUI 内弹菜单：GenericMenu.ShowAsContext 依赖
-                // Event.current，在 HTTP 回调（EditorApplication.update）里直接调会静默失效
+                // 异步拉回的规格列表转到 OnGUI 内弹出（弹窗锚定需要 GUI 事件上下文里缓存的按钮 rect）
                 if (m_PendingSpecs != null && Event.current.type == EventType.Layout)
                 {
                     var specs = m_PendingSpecs;
                     m_PendingSpecs = null;
-                    ShowSpecMenu(specs);
+                    ShowSpecDropdown(specs);
                 }
                 DrawEntryList();
                 // 防御 1：编辑态跨环境（编辑中切了环境 → 下标/语义都不再成立）。
@@ -428,6 +428,9 @@ namespace MyVerseXRSDK.Editor
             {
                 if (GUILayout.Button(m_FetchingSpecs ? "拉取中…" : "创建新条目", GUILayout.Width(84f)))
                     OnCreateEntryClicked();
+                // 缓存按钮 rect 供规格弹窗锚定（异步拉回后才弹，届时拿不到本帧布局；GetLastRect 仅 Repaint 时有效值）
+                if (Event.current.type == EventType.Repaint)
+                    m_CreateButtonRect = GUILayoutUtility.GetLastRect();
             }
             if (GUILayout.Button("刷新", GUILayout.Width(44f)))
                 Repaint();
@@ -497,25 +500,22 @@ namespace MyVerseXRSDK.Editor
                 });
         }
 
-        private void ShowSpecMenu(System.Collections.Generic.List<RegionSpec> specs)
+        // 规格选择弹窗：AdvancedDropdown（自带搜索/滚动/键盘导航），规格上百条时 GenericMenu 无法定位目标
+        private void ShowSpecDropdown(System.Collections.Generic.List<RegionSpec> specs)
         {
-            var menu = new GenericMenu();
-            foreach (var spec in specs)
-            {
+            var env = m_EnvThisFrame;
+            var dropdown = new RegionSpecDropdown(specs,
                 // 当前环境已持久化条目 + 当前未保存的新建工作副本 都算"已存在"→ 置灰
-                bool taken = Target.dataList.ContainsId(m_EnvThisFrame, spec.id) ||
-                             (Target.isEditing && Target.isNewEntry && Target.workingCopy.id == spec.id);
-                if (taken)
+                isTaken: id => Target.dataList.ContainsId(env, id) ||
+                               (Target.isEditing && Target.isNewEntry && Target.workingCopy.id == id),
+                onSelect: spec =>
                 {
-                    menu.AddDisabledItem(new GUIContent(spec.id));
-                }
-                else
-                {
-                    var captured = spec; // 闭包捕获当前项
-                    menu.AddItem(new GUIContent(captured.id), false, () => BeginCreate(captured));
-                }
-            }
-            menu.ShowAsContext();
+                    if (this == null) return;   // 选择回调异步于 Inspector 生命周期（Unity 假 null）
+                    // 弹窗打开期间可能切了环境：刷新帧内环境再进创建（editingEnv 要记真实环境）
+                    m_EnvThisFrame = SdkAuthStore.ActiveEnvironment;
+                    BeginCreate(spec);
+                });
+            dropdown.Show(m_CreateButtonRect);
         }
 
         private void BeginCreate(RegionSpec spec)

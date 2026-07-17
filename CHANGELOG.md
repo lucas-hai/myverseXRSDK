@@ -19,6 +19,7 @@
 - **旧版数据自动迁移（幂等，编辑器侧惰性触发）**：设置资产旧单环境凭据迁入**测试环境**（旧默认地址即测试环境，符合凭据事实；正式环境需重新验证）；地块旧平铺 `entries` 迁入**测试环境组**（签名留空，需在验证面板"重新封签"后运行时方可用）
 - `SdkAuthStore.TryGetApiContext/IsVerified` 语义改为当前激活环境；`LocalRegionDataList.FindById/ContainsId` 增加环境参数
 - 操作说明文档 `editor-tools-guide.md` 全面翻新：环境概念/按环境验证/重新封签/离线手填 id/防篡改说明/升级迁移步骤；手册 §12 同步
+- **规格选择换 AdvancedDropdown**（Add Component 同款）：自带搜索框/滚动/键盘导航，替代 GenericMenu（规格上百条时不可搜索、超屏无法定位）；条目按宽、长数值排序（避免字符串序把 10x12 排到 2x4 前），已创建 id 置灰并计数
 
 ---
 
