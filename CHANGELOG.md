@@ -6,6 +6,22 @@
 
 ---
 
+## [3.3.0] - 2026-07-17
+
+### Added
+- **SDK 环境化**：验证面板改为环境选择（正式/测试/离线，默认正式），地址内置只读（正式 `http://developer-platform.myverse.fans`、测试 `http://172.0.0.218:3888`；`serverUrlOverride` 留作应急联调）。appId/AccessToken 与验证状态**按环境独立**保存；规格拉取/地块上传按激活环境走。离线环境无验证概念（远端功能不可用、不自动弹验证窗）。环境事实源：编辑器侧 `MVXRSDKSettingsAsset.activeEnvironment`，运行时侧 `LocalRegionDataList.activeEnvironment`（面板/编辑器同步写入的构建期快照——设置资产不进包）
+- **地块数据按环境分组**：`LocalRegionDataList` 改为 `sets`（每环境一组 entries + 封签），运行时按激活环境组匹配（`LocalRegionTileStore` 统一收口：加载→取激活组→验签→查找，替代两模块各自加载）。地块编辑器环境化：列表/新建/保存/删除均作用于当前环境组，顶部环境徽标；离线环境保存 = 本地直存（新建手填 id，无上传门禁）
+- **地块数据防篡改封签（HMAC 方案）**：正式/测试环境组落盘（保存/删除）时对规范化数据（条目按 id 排序、float F6 InvariantCulture）计算 HMAC-SHA256 封签；运行时验签失败**整组拒用 + Error**（无签名同判失败，防删签绕过）；离线组免验。威胁模型：防绕过地块编辑器手改资产导致本地与平台不一致——经编辑器修改必过上传门禁（需该环境已验证），数据保持一致。规范化格式 v1 预留服务端签名升级（后端就绪后仅替换签名生产方与校验算法）。`LocalRegionDataList` 新增只读 Inspector（含各环境组封签状态）
+- 验证面板"重新封签"按钮：迁移后的存量地块逐条重传，全部成功写回签名
+- **出包前地块环境校验**（`IPreprocessBuildWithReport`）：运行时按构建期快照（`LocalRegionDataList.activeEnvironment`）取地块组，编辑器切环境调试后忘切回会把错误环境打进包——出包时激活环境非正式、或激活组封签无效即弹窗确认（可取消出包）；激活组无条目告警不拦；批处理/CI 只告警不阻塞；无地块资产的工程不打扰
+
+### Changed
+- **旧版数据自动迁移（幂等，编辑器侧惰性触发）**：设置资产旧单环境凭据迁入**测试环境**（旧默认地址即测试环境，符合凭据事实；正式环境需重新验证）；地块旧平铺 `entries` 迁入**测试环境组**（签名留空，需在验证面板"重新封签"后运行时方可用）
+- `SdkAuthStore.TryGetApiContext/IsVerified` 语义改为当前激活环境；`LocalRegionDataList.FindById/ContainsId` 增加环境参数
+- 操作说明文档 `editor-tools-guide.md` 全面翻新：环境概念/按环境验证/重新封签/离线手填 id/防篡改说明/升级迁移步骤；手册 §12 同步
+
+---
+
 ## [3.2.1] - 2026-07-15
 
 ### Changed

@@ -1,4 +1,3 @@
-using System;
 using UnityEngine;
 
 namespace MyVerseXRSDK
@@ -16,13 +15,8 @@ namespace MyVerseXRSDK
     {
         private readonly SpaceStateStore m_Store;
 
-        private LocalRegionDataList m_DataList;
-        private bool m_DataListLoadAttempted;
         private RegionSnapshot? m_LastSnapshot;
         private RegionTileView m_View;
-
-        /// <summary>测试注入点：覆盖地块列表加载方式（默认 Resources.Load 固定契约路径）。</summary>
-        internal Func<LocalRegionDataList> LoadDataListOverride;
 
         public RegionTileModule(SpaceStateStore store)
         {
@@ -39,8 +33,6 @@ namespace MyVerseXRSDK
             m_Store.OnRegionChanged -= OnRegionChanged;
             DestroyView();
             m_LastSnapshot = null;
-            m_DataList = null;
-            m_DataListLoadAttempted = false;
         }
 
         private void OnRegionChanged(RegionSnapshot snapshot)
@@ -66,12 +58,11 @@ namespace MyVerseXRSDK
             }
 
             var id = RegionIdUtil.MakeRuntimeId(snapshot.Len, snapshot.Width);
-            var tile = FindTile(id);
+            var tile = LocalRegionTileStore.FindTile(id);
             if (tile == null)
             {
-                var list = GetDataList();
                 MVXRSDKLog.Warning($"RegionTile.Refresh: ShowFloor=true 但无匹配地块 id=[{id}]" +
-                                   $"（长{snapshot.Len} 宽{snapshot.Width}），本地条目数 {(list == null ? 0 : list.entries.Count)}，不显示");
+                                   $"（长{snapshot.Len} 宽{snapshot.Width}），激活环境有效条目数 {LocalRegionTileStore.ValidEntryCount}，不显示");
                 if (m_View != null) m_View.gameObject.SetActive(false);
                 return;
             }
@@ -112,24 +103,5 @@ namespace MyVerseXRSDK
             m_View = null;
         }
 
-        private LocalRegionDataList GetDataList()
-        {
-            if (!m_DataListLoadAttempted)
-            {
-                m_DataListLoadAttempted = true;
-                m_DataList = LoadDataListOverride != null
-                    ? LoadDataListOverride()
-                    : Resources.Load<LocalRegionDataList>(LocalRegionDataList.ResourcesLoadPath);
-                if (m_DataList == null)
-                    MVXRSDKLog.Warning($"RegionTileModule: 本地区域数据列表加载失败：Resources/{LocalRegionDataList.ResourcesLoadPath}，地块可视物不显示");
-            }
-            return m_DataList;
-        }
-
-        private LocalRegionData FindTile(string runtimeId)
-        {
-            var list = GetDataList();
-            return list == null ? null : list.FindById(runtimeId);
-        }
     }
 }

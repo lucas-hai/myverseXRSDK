@@ -22,6 +22,7 @@ namespace MyVerseXRSDK
         [HideInInspector] public int editingIndex = -1;        // 编辑已有条目时的下标；新建为 -1
         [HideInInspector] public bool hasUnsavedChanges;
         [HideInInspector] public LocalRegionData workingCopy = new LocalRegionData();
+        [HideInInspector] public SdkEnvironment editingEnv;    // 编辑发起时的环境；切环境后编辑态失效防错写
 
 #if UNITY_EDITOR
         // 常显选中地块：Gizmo 不依赖选中态（OnSceneGUI 只在选中编辑器对象时跑）。

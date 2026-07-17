@@ -38,6 +38,7 @@ namespace MyVerseXRSDK
             m_SpaceObstacles.UnInitSDK();
             m_SpatialAlternation.UnInitSDK();
             m_RegionTile.UnInitSDK();
+            LocalRegionTileStore.Reset();   // 清地块数据加载/验签缓存与测试注入点
             m_Store.Clear();
             s_Initialized = false;
         }

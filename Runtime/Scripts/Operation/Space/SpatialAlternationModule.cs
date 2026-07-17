@@ -17,15 +17,11 @@ namespace MyVerseXRSDK
         private readonly List<Transform> m_SceneRootNodes = new();
 
         // ------ Region 匹配与计算缓存 ------
+        // 地片加载/验签/查找统一走 LocalRegionTileStore（含防篡改验签与测试注入点）
         private string m_LastRuntimeId;              // 上次匹配用的临时 id，变化才重查地片
         private LocalRegionData m_MatchedTile;       // 当前匹配的地片条目
-        private LocalRegionDataList m_DataList;      // 地片列表缓存（Resources 只加载一次）
-        private bool m_DataListLoadAttempted;
         private Vector3? m_LastComputedPos;          // 最近一次计算结果（晚注册回放用）
         private Vector3 m_LastComputedRot;
-
-        /// <summary>测试注入点：覆盖地片列表加载方式（默认 Resources.Load 固定契约路径）。</summary>
-        internal Func<LocalRegionDataList> LoadDataListOverride;
 
         public SpatialAlternationModule(SpaceStateStore store)
         {
@@ -42,8 +38,6 @@ namespace MyVerseXRSDK
             m_Store.OnRegionChanged -= OnRegionChanged;
             m_LastRuntimeId = null;
             m_MatchedTile = null;
-            m_DataList = null;
-            m_DataListLoadAttempted = false;
             m_LastComputedPos = null;
         }
 
@@ -110,14 +104,13 @@ namespace MyVerseXRSDK
             if (m_MatchedTile == null || !string.Equals(runtimeId, m_LastRuntimeId, StringComparison.Ordinal))
             {
                 m_LastRuntimeId = runtimeId;
-                m_MatchedTile = FindTile(runtimeId);
+                m_MatchedTile = LocalRegionTileStore.FindTile(runtimeId);
             }
             if (m_MatchedTile == null)
             {
                 m_LastComputedPos = null;
-                var list = GetDataList();
                 MVXRSDKLog.Warning($"Region 快照无匹配地片：远端长宽 ({snapshot.Len}, {snapshot.Width}) → 临时 id [{runtimeId}]，" +
-                                   $"本地条目数 {(list == null ? 0 : list.entries.Count)}，场景根节点保持原位");
+                                   $"激活环境有效条目数 {LocalRegionTileStore.ValidEntryCount}，场景根节点保持原位");
                 return;
             }
 
@@ -145,27 +138,6 @@ namespace MyVerseXRSDK
             position = default;
             eulerAngles = default;
             return false;
-        }
-
-        private LocalRegionDataList GetDataList()
-        {
-            if (!m_DataListLoadAttempted)
-            {
-                m_DataListLoadAttempted = true;
-                m_DataList = LoadDataListOverride != null
-                    ? LoadDataListOverride()
-                    : Resources.Load<LocalRegionDataList>(LocalRegionDataList.ResourcesLoadPath);
-                if (m_DataList == null)
-                    MVXRSDKLog.Warning($"本地区域数据列表加载失败：Resources/{LocalRegionDataList.ResourcesLoadPath}" +
-                                       "（工程未提供或路径不符），Region 对齐不生效");
-            }
-            return m_DataList;
-        }
-
-        private LocalRegionData FindTile(string runtimeId)
-        {
-            var list = GetDataList();
-            return list == null ? null : list.FindById(runtimeId);
         }
 
         private void ApplyToAll(Vector3 position, Vector3 eulerAngles, string sourceTag)

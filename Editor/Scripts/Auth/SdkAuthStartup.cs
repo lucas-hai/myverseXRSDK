@@ -25,6 +25,11 @@ namespace MyVerseXRSDK.Editor
             EditorApplication.update -= ShowOnce;
             if (SessionState.GetBool(SessionKey, false)) return;
             SessionState.SetBool(SessionKey, true);
+            // 旧版地块数据迁移挂启动钩子（幂等）：不依赖用户打开某个面板才触发，
+            // 否则"只出包不开面板"的工程会把未迁移数据（激活组为空）带进包
+            RegionDataMigration.MigrateIfNeeded(RegionDataMigration.FindDataList());
+            // 离线环境无验证概念，不自动弹窗骚扰
+            if (SdkAuthStore.ActiveEnvironment == SdkEnvironment.Offline) return;
             if (SdkAuthStore.IsVerified) return;
             SdkAuthWindow.Open();
         }

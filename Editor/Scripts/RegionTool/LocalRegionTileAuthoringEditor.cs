@@ -3,11 +3,20 @@ using UnityEngine;
 
 namespace MyVerseXRSDK.Editor
 {
-    /// <summary>地块编辑器 Inspector：配置文件管理 + 条目列表；编辑态与保存门禁见后续任务扩展。</summary>
+    // 别名必须在 namespace 内：父命名空间的 internal MyVerseXRSDK.MessageType（IVT 后可见）优先于文件顶层 using
+    using MessageType = UnityEditor.MessageType;
+
+    /// <summary>
+    /// 地块编辑器 Inspector：配置文件管理 + 当前环境条目列表 + 编辑态与保存门禁。
+    /// 环境化：列表/新建/保存/删除全部作用于当前激活环境组（SDK 验证面板切换环境）；
+    /// 正式/测试环境保存 = 上传成功才落盘并重新封签；离线环境 = 本地直存（手填 id，无封签）。
+    /// </summary>
     [CustomEditor(typeof(LocalRegionTileAuthoring))]
     public sealed class LocalRegionTileAuthoringEditor : UnityEditor.Editor
     {
         private const int EntriesPerPage = 5;   // 条目滚动列表一页显示的条数，超出滚动
+
+        private static readonly System.Collections.Generic.List<LocalRegionData> s_Empty = new();
 
         private string m_Search = "";
         private bool m_FetchingSpecs;                                          // 规格列表拉取在途（按钮置灰防重入）
@@ -15,15 +24,38 @@ namespace MyVerseXRSDK.Editor
         private bool m_Uploading;                                              // 地块上传在途（冻结全部交互）
         private Vector2 m_EntryListScroll;
 
+        // 帧内环境缓存：SdkAuthStore.ActiveEnvironment 每次查 AssetDatabase，OnInspectorGUI 一帧引用多次，
+        // 开头取一次即可；按钮回调都在 OnInspectorGUI 栈内执行，读该字段同样有效（OnSceneGUI 不用环境）
+        private SdkEnvironment m_EnvThisFrame;
+
         private LocalRegionTileAuthoring Target => (LocalRegionTileAuthoring)target;
+
+        // 当前环境组条目（只读路径用；无组返回共享空列表，不隐式建组改资产）
+        private System.Collections.Generic.List<LocalRegionData> CurrentEntries
+        {
+            get
+            {
+                var set = Target.dataList != null ? Target.dataList.GetSet(m_EnvThisFrame) : null;
+                return set != null ? set.entries : s_Empty;
+            }
+        }
+
+        private void OnEnable()
+        {
+            // 旧版数据迁移是一次性动作（幂等）：放 OnEnable 而非每帧 OnInspectorGUI
+            var authoring = target as LocalRegionTileAuthoring;
+            if (authoring != null) RegionDataMigration.MigrateIfNeeded(authoring.dataList);
+        }
 
         public override void OnInspectorGUI()
         {
+            m_EnvThisFrame = SdkAuthStore.ActiveEnvironment;
             // 上传在途：冻结全部交互（防重复保存/切换条目/删除导致回调写错行），完成后解冻
             if (m_Uploading)
                 EditorGUILayout.HelpBox("正在上传地块数据…", MessageType.Info);
             using (new EditorGUI.DisabledScope(m_Uploading))
             {
+                DrawEnvironmentBadge();
                 DrawDataListRow();
                 DrawAlwaysShowToggle();
                 if (Target.dataList == null)
@@ -31,6 +63,7 @@ namespace MyVerseXRSDK.Editor
                     EditorGUILayout.HelpBox("请指定或新建本地区域数据列表文件", MessageType.Info);
                     return;
                 }
+                RegionDataMigration.SyncActiveEnvironment(Target.dataList, m_EnvThisFrame);
                 DrawAssetPathWarning();
                 DrawToolbar();
                 // 异步拉回的规格列表转到 OnGUI 内弹菜单：GenericMenu.ShowAsContext 依赖
@@ -42,18 +75,48 @@ namespace MyVerseXRSDK.Editor
                     ShowSpecMenu(specs);
                 }
                 DrawEntryList();
-                // 防御：编辑中的已有条目下标失效（删除/Undo/外部改动）→ 退出编辑态，不再显示编辑区
-                if (Target.isEditing && !Target.isNewEntry &&
-                    (Target.editingIndex < 0 || Target.editingIndex >= Target.dataList.entries.Count))
+                // 防御 1：编辑态跨环境（编辑中切了环境 → 下标/语义都不再成立）。
+                // 有未保存修改时不静默丢弃（切环境可能是在别的窗口顺手点的）——提示切回或显式放弃；
+                // 无修改（含旧版序列化残留的编辑态，editingEnv 缺省 Production）则直接退出编辑态
+                bool editingEnvMismatch = Target.isEditing && Target.editingEnv != m_EnvThisFrame;
+                if (editingEnvMismatch && !Target.hasUnsavedChanges)
                 {
-                    Target.isEditing = false;
-                    Target.editingIndex = -1;
-                    Target.hasUnsavedChanges = false;
-                    SceneView.RepaintAll();
+                    EndEditingState();
+                    editingEnvMismatch = false;
                 }
+                if (editingEnvMismatch)
+                {
+                    EditorGUILayout.HelpBox(
+                        $"正在编辑的条目属于{SdkAuthStore.EnvDisplayName(Target.editingEnv)}，且有未保存修改；" +
+                        $"当前环境已切到{SdkAuthStore.EnvDisplayName(m_EnvThisFrame)}。\n" +
+                        "请在 SDK 验证面板切回原环境继续编辑，或点击下方按钮放弃修改。", MessageType.Warning);
+                    if (GUILayout.Button("放弃修改并退出编辑"))
+                        EndEditingState();
+                    return;   // 环境错位期间不画编辑面板（保存会写错环境组）
+                }
+                // 防御 2：编辑中的已有条目下标失效（删除/Undo/外部改动）→ 退出编辑态，不再显示编辑区
+                if (Target.isEditing && !Target.isNewEntry &&
+                    (Target.editingIndex < 0 || Target.editingIndex >= CurrentEntries.Count))
+                    EndEditingState();
                 if (Target.isEditing)
                     DrawEditPanel();
             }
+        }
+
+        // 环境徽标：让"当前在哪个环境编辑"一眼可见（颜色区分），并给离线环境行为提示
+        private void DrawEnvironmentBadge()
+        {
+            var env = m_EnvThisFrame;
+            var prev = GUI.backgroundColor;
+            GUI.backgroundColor = env == SdkEnvironment.Production ? new Color(0.55f, 0.9f, 0.55f)
+                                : env == SdkEnvironment.Test       ? new Color(1f, 0.75f, 0.35f)
+                                                                    : new Color(0.75f, 0.75f, 0.75f);
+            EditorGUILayout.BeginVertical("box");
+            GUI.backgroundColor = prev;
+            string hint = env == SdkEnvironment.Offline ? "（仅本地保存，无上传/封签；新建条目手填 id）"
+                                                        : "（保存需上传成功，落盘后自动封签）";
+            EditorGUILayout.LabelField($"当前环境：{SdkAuthStore.EnvDisplayName(env)} {hint}", EditorStyles.boldLabel);
+            EditorGUILayout.EndVertical();
         }
 
         // 删除条目后同步编辑态：删的是正在编辑的条目 → 退出编辑；删的在其前面 → 下标前移对齐
@@ -62,19 +125,12 @@ namespace MyVerseXRSDK.Editor
             if (!Target.isEditing || Target.isNewEntry) return;
             Undo.RecordObject(Target, "删除地块条目");
             if (Target.editingIndex == deletedIndex)
-            {
-                Target.isEditing = false;
-                Target.editingIndex = -1;
-                Target.hasUnsavedChanges = false;
-                SceneView.RepaintAll();
-            }
+                EndEditingState();
             else if (Target.editingIndex > deletedIndex)
-            {
                 Target.editingIndex--;
-            }
         }
 
-        // ------ 编辑态：工作副本模型，保存门禁见 Task 8 ------
+        // ------ 编辑态：工作副本模型 ------
 
         private void StartEditExisting(int index)
         {
@@ -83,8 +139,9 @@ namespace MyVerseXRSDK.Editor
             Target.isEditing = true;
             Target.isNewEntry = false;
             Target.editingIndex = index;
+            Target.editingEnv = m_EnvThisFrame;
             Target.hasUnsavedChanges = false;
-            Target.workingCopy = Target.dataList.entries[index].Clone();
+            Target.workingCopy = CurrentEntries[index].Clone();
             SceneView.RepaintAll();
             Repaint();
         }
@@ -100,6 +157,18 @@ namespace MyVerseXRSDK.Editor
             EditorGUILayout.BeginVertical("HelpBox");
             EditorGUILayout.LabelField(Target.isNewEntry ? $"编辑区域（新建条目）: {wc.id}" : $"编辑区域: {wc.id}",
                                        EditorStyles.boldLabel);
+            // 离线环境新建：无远端规格来源，id 手填（格式同远端 tagId：宽x长小写，如 6x12）
+            if (Target.isNewEntry && m_EnvThisFrame == SdkEnvironment.Offline)
+            {
+                EditorGUI.BeginChangeCheck();
+                var id = EditorGUILayout.TextField("ID（宽x长小写，如 6x12）", wc.id);
+                if (EditorGUI.EndChangeCheck())
+                {
+                    Undo.RecordObject(Target, "编辑地块 id");
+                    wc.id = id;
+                    Target.hasUnsavedChanges = true;
+                }
+            }
             EditorGUI.BeginChangeCheck();
             var len = EditorGUILayout.FloatField("长（米，本地Z轴）", wc.len);
             var width = EditorGUILayout.FloatField("宽（米，本地X轴）", wc.width);
@@ -108,7 +177,7 @@ namespace MyVerseXRSDK.Editor
             if (EditorGUI.EndChangeCheck())
             {
                 Undo.RecordObject(Target, "编辑地块数据");
-                wc.len = len;       // 长宽可编辑；id 不变，运行时匹配仍按 id
+                wc.len = len;       // 长宽可编辑；id 不变（离线新建除外），运行时匹配仍按 id
                 wc.width = width;
                 wc.position = pos;
                 wc.rotation = rot;
@@ -125,10 +194,11 @@ namespace MyVerseXRSDK.Editor
             EditorGUILayout.EndVertical();
         }
 
-        // ------ 保存门禁：上传成功是落盘前置条件（失败不落盘，工作副本保留可重试）------
+        // ------ 保存门禁：正式/测试 = 上传成功才落盘并重新封签；离线 = 本地直存（无封签）------
 
         private void SaveWorkingCopy()
         {
+            var env = m_EnvThisFrame;
             var snapshot = Target.workingCopy.Clone(); // 上传与落盘用同一份快照，防止回调期间被继续编辑
             // 捕获写入上下文：上传期间 UI 已冻结，但 Inspector 可能被关闭/切换选中对象，
             // 回调不能再依赖 Target 的编辑态
@@ -136,32 +206,19 @@ namespace MyVerseXRSDK.Editor
             bool isNewEntry = Target.isNewEntry;
             int editingIndex = Target.editingIndex;
 
+            if (env == SdkEnvironment.Offline)
+            {
+                SaveOffline(dataList, snapshot, isNewEntry, editingIndex);
+                return;
+            }
+
             m_Uploading = true;
             Repaint();
             RegionToolServices.Uploader.Upload(snapshot,
                 onDone: () =>
                 {
                     // 门禁兑现：上传已成功，即使 Inspector 已关闭也要落盘（用捕获的写入目标）
-                    bool saved = false;
-                    if (dataList != null)
-                    {
-                        Undo.RecordObject(dataList, "保存地块条目");
-                        if (isNewEntry)
-                        {
-                            dataList.entries.Add(snapshot);
-                            saved = true;
-                        }
-                        else if (editingIndex >= 0 && editingIndex < dataList.entries.Count)
-                        {
-                            dataList.entries[editingIndex] = snapshot;
-                            saved = true;
-                        }
-                        if (saved)
-                        {
-                            EditorUtility.SetDirty(dataList);
-                            AssetDatabase.SaveAssets();
-                        }
-                    }
+                    bool saved = WriteEntry(dataList, env, snapshot, isNewEntry, editingIndex);
                     if (!saved)
                     {
                         Debug.LogWarning($"[MVXRSDK] 地块 {snapshot.id} 已上传成功，但本地写入目标已失效（配置文件被删/条目下标失效），未落盘");
@@ -171,15 +228,10 @@ namespace MyVerseXRSDK.Editor
                     {
                         m_Uploading = false;
                         Undo.RecordObject(Target, "结束编辑地块");
-                        Target.isEditing = false;
-                        Target.isNewEntry = false;
-                        Target.editingIndex = -1;
-                        Target.hasUnsavedChanges = false;
-                        SceneView.RepaintAll();
-                        Repaint();
+                        EndEditingState();
                     }
                     if (saved)
-                        EditorUtility.DisplayDialog("保存成功", $"地块 {snapshot.id} 已上传远端并保存到本地。", "确定");
+                        EditorUtility.DisplayDialog("保存成功", $"地块 {snapshot.id} 已上传远端并保存到本地（已封签）。", "确定");
                 },
                 onError: error =>
                 {
@@ -191,6 +243,66 @@ namespace MyVerseXRSDK.Editor
                     EditorUtility.DisplayDialog("上传失败",
                         $"{error}\n\n数据未保存，可修改后重试。", "确定");
                 });
+        }
+
+        // 离线保存：无上传门禁。新建需手填 id（非空 + 组内唯一）；组签名恒空（离线无封签语义）
+        private void SaveOffline(LocalRegionDataList dataList, LocalRegionData snapshot, bool isNewEntry, int editingIndex)
+        {
+            snapshot.id = snapshot.id?.Trim();
+            if (string.IsNullOrEmpty(snapshot.id))
+            {
+                EditorUtility.DisplayDialog("无法保存", "离线环境新建条目需填写 id（宽x长小写，如 6x12）。", "确定");
+                return;
+            }
+            if (isNewEntry && dataList.ContainsId(SdkEnvironment.Offline, snapshot.id))
+            {
+                EditorUtility.DisplayDialog("无法保存", $"离线环境已存在 id 为 {snapshot.id} 的条目。", "确定");
+                return;
+            }
+            bool saved = WriteEntry(dataList, SdkEnvironment.Offline, snapshot, isNewEntry, editingIndex);
+            if (saved)
+            {
+                EndEditingState();
+                EditorUtility.DisplayDialog("已本地保存", $"地块 {snapshot.id} 已保存到本地（离线环境，未上传、无封签）。", "确定");
+            }
+        }
+
+        // 写入当前环境组并维护封签（RegionDataSeal.Reseal 统一封签规则：离线恒空、其余重算）
+        private static bool WriteEntry(LocalRegionDataList dataList, SdkEnvironment env,
+                                       LocalRegionData snapshot, bool isNewEntry, int editingIndex)
+        {
+            if (dataList == null) return false;
+            Undo.RecordObject(dataList, "保存地块条目");
+            var set = dataList.GetOrCreateSet(env);
+            bool saved = false;
+            if (isNewEntry)
+            {
+                set.entries.Add(snapshot);
+                saved = true;
+            }
+            else if (editingIndex >= 0 && editingIndex < set.entries.Count)
+            {
+                set.entries[editingIndex] = snapshot;
+                saved = true;
+            }
+            if (saved)
+            {
+                RegionDataSeal.Reseal(set);
+                EditorUtility.SetDirty(dataList);
+                AssetDatabase.SaveAssets();
+            }
+            return saved;
+        }
+
+        // 编辑态统一出口（保存成功/取消/删除当前条目/防御失效都走这里，字段清理只维护一份）
+        private void EndEditingState()
+        {
+            Target.isEditing = false;
+            Target.isNewEntry = false;
+            Target.editingIndex = -1;
+            Target.hasUnsavedChanges = false;
+            SceneView.RepaintAll();
+            Repaint();
         }
 
         // 有未保存修改时返回 false 表示用户选择留在编辑态
@@ -205,12 +317,7 @@ namespace MyVerseXRSDK.Editor
         {
             if (!ConfirmDiscardUnsaved()) return;
             Undo.RecordObject(Target, "取消编辑地块");
-            Target.isEditing = false;
-            Target.isNewEntry = false;
-            Target.editingIndex = -1;
-            Target.hasUnsavedChanges = false;
-            SceneView.RepaintAll();
-            Repaint();
+            EndEditingState();
         }
 
         // ------ SceneView：底框绘制 + 位置/旋转 Handle ------
@@ -259,13 +366,14 @@ namespace MyVerseXRSDK.Editor
             {
                 Undo.RecordObject(Target, "切换配置文件");
                 Target.dataList = newList;
+                RegionDataMigration.MigrateIfNeeded(newList);   // 新挂上的资产同样触发一次迁移（幂等）
             }
             if (Target.dataList == null && GUILayout.Button("新建", GUILayout.Width(44f)))
                 CreateDataListAsset();
             EditorGUILayout.EndHorizontal();
         }
 
-        // 默认创建到运行时契约路径 Assets/Resources/MVXRSDK/LocalRegionData.asset
+        // 默认创建到运行时契约路径（由 ResourcesLoadPath 派生），保证运行时能加载到
         private void CreateDataListAsset()
         {
             if (!AssetDatabase.IsValidFolder("Assets/Resources"))
@@ -273,22 +381,24 @@ namespace MyVerseXRSDK.Editor
             if (!AssetDatabase.IsValidFolder("Assets/Resources/MVXRSDK"))
                 AssetDatabase.CreateFolder("Assets/Resources", "MVXRSDK");
 
+            var assetPath = $"Assets/Resources/{LocalRegionDataList.ResourcesLoadPath}.asset";
             var asset = ScriptableObject.CreateInstance<LocalRegionDataList>();
-            AssetDatabase.CreateAsset(asset, "Assets/Resources/MVXRSDK/LocalRegionData.asset");
+            asset.activeEnvironment = m_EnvThisFrame;
+            AssetDatabase.CreateAsset(asset, assetPath);
             AssetDatabase.SaveAssets();
             Undo.RecordObject(Target, "新建配置文件");
             Target.dataList = asset;
-            Debug.Log("[MVXRSDK] 已创建本地区域数据列表：Assets/Resources/MVXRSDK/LocalRegionData.asset");
+            Debug.Log($"[MVXRSDK] 已创建本地区域数据列表：{assetPath}");
         }
 
-        // 运行时按 Resources/MVXRSDK/LocalRegionData 固定路径加载，路径不符给警告
+        // 运行时按契约路径固定加载，路径不符给警告
         private void DrawAssetPathWarning()
         {
             var path = AssetDatabase.GetAssetPath(Target.dataList);
-            if (!path.EndsWith("/Resources/MVXRSDK/LocalRegionData.asset"))
+            if (!path.EndsWith(RegionDataMigration.ContractAssetSuffix))
             {
                 EditorGUILayout.HelpBox(
-                    $"资产路径不符合运行时加载契约（任一 Resources 根下的 MVXRSDK/LocalRegionData.asset），运行时将加载不到：\n{path}",
+                    $"资产路径不符合运行时加载契约（任一 Resources 根下的 {LocalRegionDataList.ResourcesLoadPath}.asset），运行时将加载不到：\n{path}",
                     MessageType.Warning);
             }
         }
@@ -324,15 +434,37 @@ namespace MyVerseXRSDK.Editor
             EditorGUILayout.EndHorizontal();
         }
 
-        // ------ 创建条目：验证拦截 → 每次点击都重新拉规格 → 置灰选择 ------
+        // ------ 创建条目：离线手填 id；正式/测试验证拦截 → 每次点击都重新拉规格 → 置灰选择 ------
 
         private void OnCreateEntryClicked()
         {
             if (!ConfirmDiscardUnsaved()) return;
+            // 离线环境：无远端规格来源，直接进入手填 id 的新建编辑态
+            if (m_EnvThisFrame == SdkEnvironment.Offline)
+            {
+                Undo.RecordObject(Target, "创建地块条目");
+                Target.isEditing = true;
+                Target.isNewEntry = true;
+                Target.editingIndex = -1;
+                Target.editingEnv = SdkEnvironment.Offline;
+                Target.hasUnsavedChanges = true;
+                Target.workingCopy = new LocalRegionData
+                {
+                    id = "",
+                    len = 6f,
+                    width = 6f,
+                    position = Vector3.zero,
+                    rotation = Vector3.zero,
+                };
+                SceneView.RepaintAll();
+                Repaint();
+                return;
+            }
             if (!SdkAuthStore.IsVerified)
             {
                 if (EditorUtility.DisplayDialog("需要 SDK 验证",
-                        "拉取区域规格列表需要先完成 SDK 验证。", "打开验证面板", "取消"))
+                        $"拉取区域规格列表需要先完成当前环境（{SdkAuthStore.EnvDisplayName(m_EnvThisFrame)}）的 SDK 验证。",
+                        "打开验证面板", "取消"))
                     SdkAuthWindow.Open();
                 return;
             }
@@ -370,8 +502,8 @@ namespace MyVerseXRSDK.Editor
             var menu = new GenericMenu();
             foreach (var spec in specs)
             {
-                // 已持久化条目 + 当前未保存的新建工作副本 都算“已存在”→ 置灰
-                bool taken = Target.dataList.ContainsId(spec.id) ||
+                // 当前环境已持久化条目 + 当前未保存的新建工作副本 都算"已存在"→ 置灰
+                bool taken = Target.dataList.ContainsId(m_EnvThisFrame, spec.id) ||
                              (Target.isEditing && Target.isNewEntry && Target.workingCopy.id == spec.id);
                 if (taken)
                 {
@@ -402,6 +534,7 @@ namespace MyVerseXRSDK.Editor
             Target.isEditing = true;
             Target.isNewEntry = true;
             Target.editingIndex = -1;
+            Target.editingEnv = m_EnvThisFrame;
             Target.hasUnsavedChanges = true;
             Target.workingCopy = new LocalRegionData
             {
@@ -415,7 +548,7 @@ namespace MyVerseXRSDK.Editor
             Repaint();
         }
 
-        // ------ 条目列表（行点击进入编辑态在 Task 7 接管）------
+        // ------ 条目列表（当前环境组）------
 
         private bool MatchesSearch(LocalRegionData entry)
         {
@@ -426,14 +559,14 @@ namespace MyVerseXRSDK.Editor
 
         private void DrawEntryList()
         {
-            var entries = Target.dataList.entries;
+            var entries = CurrentEntries;
             // 新建中的工作副本落盘前不在 entries 里，以"未保存"草稿行显示，避免被误读成"创建了但列表不显示"
             bool hasDraftRow = Target.isEditing && Target.isNewEntry && Target.workingCopy != null;
 
             // 列表区域：独立区块（标题 + 盒式背景），滚动区固定五行高，不随条数收缩
             EditorGUILayout.Space(6f);
             EditorGUILayout.BeginVertical("HelpBox");
-            EditorGUILayout.LabelField($"地块条目列表（{entries.Count} 条{(hasDraftRow ? "，+1 未保存" : "")}）",
+            EditorGUILayout.LabelField($"地块条目列表（{SdkAuthStore.EnvDisplayName(m_EnvThisFrame)}，{entries.Count} 条{(hasDraftRow ? "，+1 未保存" : "")}）",
                                        EditorStyles.boldLabel);
 
             float rowHeight = EditorGUIUtility.singleLineHeight + 10f;   // box 行含内外边距的近似高度
@@ -462,6 +595,9 @@ namespace MyVerseXRSDK.Editor
                     {
                         Undo.RecordObject(Target.dataList, "删除地块条目");
                         entries.RemoveAt(i);
+                        // 删除也是数据变更：重新封签（统一走 Reseal，离线组恒空签名），否则组签名失效运行时整组拒用
+                        var set = Target.dataList.GetSet(m_EnvThisFrame);
+                        if (set != null) RegionDataSeal.Reseal(set);
                         EditorUtility.SetDirty(Target.dataList);
                         AssetDatabase.SaveAssets();
                         OnEntryDeleted(i);

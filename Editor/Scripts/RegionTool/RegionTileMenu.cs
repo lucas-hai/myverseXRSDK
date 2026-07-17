@@ -13,25 +13,11 @@ namespace MyVerseXRSDK.Editor
             var go = new GameObject("本地区域地块编辑器");
             go.tag = "EditorOnly"; // 打包自动剔除，地块编辑器不进真机
             var authoring = go.AddComponent<LocalRegionTileAuthoring>();
-            // 工程已有区域配置文件时自动挂到"当前配置文件"，省去手动指定
-            authoring.dataList = FindExistingDataList();
+            // 工程已有区域配置文件时自动挂到"当前配置文件"，省去手动指定（契约路径优先的统一查找）
+            authoring.dataList = RegionDataMigration.FindDataList();
             GameObjectUtility.SetParentAndAlign(go, command.context as GameObject);
             Undo.RegisterCreatedObjectUndo(go, "生成本地区域地块编辑器");
             Selection.activeGameObject = go;
-        }
-
-        // 全工程查找已有 LocalRegionDataList 资产；多个时优先运行时契约路径（Resources/MVXRSDK/LocalRegionData）
-        private static LocalRegionDataList FindExistingDataList()
-        {
-            var guids = AssetDatabase.FindAssets("t:LocalRegionDataList");
-            if (guids.Length == 0) return null;
-            foreach (var guid in guids)
-            {
-                var path = AssetDatabase.GUIDToAssetPath(guid);
-                if (path.EndsWith("/Resources/MVXRSDK/LocalRegionData.asset"))
-                    return AssetDatabase.LoadAssetAtPath<LocalRegionDataList>(path);
-            }
-            return AssetDatabase.LoadAssetAtPath<LocalRegionDataList>(AssetDatabase.GUIDToAssetPath(guids[0]));
         }
     }
 }
