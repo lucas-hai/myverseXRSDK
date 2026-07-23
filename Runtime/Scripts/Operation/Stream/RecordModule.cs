@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Google.Protobuf;
 
 namespace MyVerseXRSDK
@@ -6,14 +7,19 @@ namespace MyVerseXRSDK
     /// <summary>
     /// 录屏请求-应答聚合器。SDK 仅做参数转发，pb StartRecord.Response 只含 Success，
     /// 因此结果回调仅传 success + errMsg。无 StopRecord（限时模式由 Duration 控制）。
+    ///
+    /// 并发语义（按录制目标去重）：服务端支持多路并发录制，故守卫按"录制目标"键控——
+    /// 不同目标（如 PICO 头显 vs 外部真实摄像机）可同时在途；仅同一目标在途时重复请求
+    /// 才去重拒绝（防抖）。目标键见 <see cref="BuildTargetKey"/>。
     /// </summary>
     internal class RecordModule
     {
         private readonly Func<bool> m_IsConnected;
         private readonly Action<string, ByteString, Action<int, byte[]>> m_SendRequest;
 
-        // 是否有进行中的请求；同一时刻只允许一个 StartRecord 未应答
-        private bool m_Pending;
+        // 在途（已发出未应答）的录制目标键集合；应答/超时/断连回调回来时移除对应键。
+        // 用集合而非单个 bool：不同目标可并发在途，各自独立收敛
+        private readonly HashSet<string> m_PendingKeys = new();
 
         internal event Action<MVXRSDKErrorCode, string> OnResult;   // 成功时 code=Ok
 
@@ -34,10 +40,11 @@ namespace MyVerseXRSDK
                 return;
             }
 
-            if (m_Pending)
+            string targetKey = BuildTargetKey(opts);
+            if (m_PendingKeys.Contains(targetKey))
             {
-                MVXRSDKLog.Warning("RecordModule: 已有进行中的录屏请求，拒绝 StartRecord");
-                OnResult?.Invoke(MVXRSDKErrorCode.RecordAlreadyRecording, "another record in progress");
+                MVXRSDKLog.Warning($"RecordModule: 该录制目标已有进行中的请求，拒绝重复 StartRecord key={targetKey}");
+                OnResult?.Invoke(MVXRSDKErrorCode.RecordAlreadyRecording, $"another record in progress for target {targetKey}");
                 return;
             }
 
@@ -58,15 +65,27 @@ namespace MyVerseXRSDK
                 PicoDeviceId = opts.PicoDeviceId ?? string.Empty
             };
 
-            m_Pending = true;
+            m_PendingKeys.Add(targetKey);
             MVXRSDKLog.Info($"RecordModule: 发起 StartRecord fileName={req.FileName} duration={req.Duration}s realCamera={req.RealCamera}");
 
-            m_SendRequest(MessageType.CS_START_RECORD, req.ToByteString(), OnStartResponse);
+            // 闭包捕获 targetKey：多目标并发在途时，应答回来须精确移除对应目标（不能清全局标志）
+            m_SendRequest(MessageType.CS_START_RECORD, req.ToByteString(),
+                (code, buffer) => OnStartResponse(targetKey, code, buffer));
         }
 
-        private void OnStartResponse(int code, byte[] buffer)
+        /// <summary>
+        /// 录制目标唯一键：真实摄像机按 CameraId 区分，PICO 设备按 PicoDeviceId 区分。
+        /// pico/cam 两类前缀天然不冲突，RealCamera 语义已隐含在前缀里。
+        /// 不同目标可并发在途；同目标重复请求去重。
+        /// </summary>
+        private static string BuildTargetKey(StartRecordOptions opts)
+            => opts.RealCamera
+                ? $"cam:{opts.CameraId ?? string.Empty}"
+                : $"pico:{opts.PicoDeviceId ?? string.Empty}";
+
+        private void OnStartResponse(string targetKey, int code, byte[] buffer)
         {
-            m_Pending = false;
+            m_PendingKeys.Remove(targetKey);
 
             if (code != 0)
             {

@@ -6,6 +6,15 @@
 
 ---
 
+## [3.3.1] - 2026-07-23
+
+### Fixed
+- **录屏并发守卫误串行化**：`RecordModule` 原用单个 `bool m_Pending` 把**所有** `StartRecord` 串成"同一时刻只允许一个在途请求"，与录制目标无关。因此 PICO 头显 + 外部真实摄像机**同帧触发**时，先占坑的那路正常发出，第二路被 `m_Pending` 挡下——只回一条 `RecordAlreadyRecording`、不打印"发起 StartRecord"日志（延迟到第一路应答后再触发才正常）。服务端支持多路并发录制，守卫改为按**录制目标**键控（真机 `cam:{CameraId}` / PICO `pico:{PicoDeviceId}`）：不同目标可同时在途、各自独立收敛，仅**同一目标**在途时重复请求才去重拒绝（防抖）。超时/断连兜底不变（每路回调闭包各带 target key，精确移除，互不污染）。
+  - 被拒日志文案随之调整为 `该录制目标已有进行中的请求，拒绝重复 StartRecord key=...`（旧文案 `已有进行中的录屏请求，拒绝 StartRecord`），有日志按串匹配的需同步。
+  - `OnRecordResult(code, msg)` 签名未变——并发多路时业务暂无法从结果区分是哪一路（pb `Response` 只含 `Success`，不回显 fileName/目标）。
+
+---
+
 ## [3.3.0] - 2026-07-17
 
 ### Added
