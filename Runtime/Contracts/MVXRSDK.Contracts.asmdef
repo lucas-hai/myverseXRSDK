@@ -1,0 +1,7 @@
+{
+    "name": "MVXRSDK.Contracts",
+    "rootNamespace": "MyVerseXRSDK",
+    "references": [],
+    "autoReferenced": true,
+    "noEngineReferences": false
+}

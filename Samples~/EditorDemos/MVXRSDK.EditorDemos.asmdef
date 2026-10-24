@@ -1,0 +1,6 @@
+{
+  "name": "MVXRSDK.EditorDemos",
+  "rootNamespace": "MyVerseXRSDK.EditorDemos",
+  "references": ["MVXRSDK.Runtime", "MVXRSDK.Contracts"],
+  "autoReferenced": true
+}

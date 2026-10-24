@@ -37,6 +37,13 @@ namespace MyVerseXRSDK
         [Tooltip("当前激活环境（验证面板切换；同步写入地块数据资产供运行时读取）")]
         public SdkEnvironment activeEnvironment = SdkEnvironment.Production;
 
+        [Header("构建策略")]
+        [Tooltip("启用时，构建必须存在有效地块组和封签；纯媒体/不使用空间的工程可显式关闭。CI与交互模式一致。")]
+        public bool requireSpatialDataForBuild = true;
+
+        [Tooltip("启用时，非正式环境阻止构建；关闭时只告警。")]
+        public bool failOnNonProductionBuild;
+
         public EnvCredential production = new EnvCredential();
         public EnvCredential test = new EnvCredential();
 

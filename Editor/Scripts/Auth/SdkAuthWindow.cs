@@ -233,48 +233,22 @@ namespace MyVerseXRSDK.Editor
             using (new EditorGUI.DisabledScope(m_Resealing || m_Verifying || cred == null || !cred.verified))
             {
                 if (GUILayout.Button(m_Resealing ? "封签中…" : "重新封签（逐条上传）", GUILayout.Height(24f)))
-                    DoReseal(env, m_DataList, set);
+                    DoReseal(env, m_DataList);
             }
             if (cred == null || !cred.verified)
                 EditorGUILayout.HelpBox("重新封签需先完成当前环境验证。", MessageType.None);
         }
 
-        private void DoReseal(SdkEnvironment env, LocalRegionDataList dataList, EnvironmentTileSet set)
+        private void DoReseal(SdkEnvironment env, LocalRegionDataList dataList)
         {
+            if (!SdkAuthStore.TryGetApiContext(env, out var context, out var contextError))
+            {
+                m_ErrorMessage = contextError;
+                return;
+            }
             m_Resealing = true;
             m_ErrorMessage = null;
-            // 上传用开始时的快照：封签期间条目列表可能被地块编辑器（另一个未冻结的 Inspector）增删，
-            // 直接按 live 列表索引递进会漏传/越界
-            var snapshot = new List<LocalRegionData>(set.entries);
-            UploadNext(0);
-
-            void UploadNext(int index)
-            {
-                // 资产可能在异步链中途被删除/重导入（Unity 假 null），落盘目标没了就中止
-                if (dataList == null)
-                {
-                    Finish(false, "地块数据资产已失效（被删除/重导入），签名未写入");
-                    return;
-                }
-                if (index >= snapshot.Count)
-                {
-                    // 全部上传成功。若期间条目被改动，快照与现状不一致——签了等于给未上传的数据背书，拒签
-                    if (!EntriesUnchanged(set.entries, snapshot))
-                    {
-                        Finish(false, "封签期间地块条目被修改，签名未写入——请重新执行封签");
-                        return;
-                    }
-                    RegionDataSeal.Reseal(set);
-                    EditorUtility.SetDirty(dataList);
-                    AssetDatabase.SaveAssets();
-                    Finish(true, null);
-                    Debug.Log($"[MVXRSDK] {SdkAuthStore.EnvDisplayName(env)}地块重新封签完成（{snapshot.Count} 条）");
-                    return;
-                }
-                RegionToolServices.Uploader.Upload(snapshot[index],
-                    onDone: () => UploadNext(index + 1),
-                    onError: error => Finish(false, $"重新封签中断：条目 [{snapshot[index].id}] 上传失败：{error}（签名未写入，可重试）"));
-            }
+            new RegionEditingService(RegionToolServices.Uploader).Reseal(context, dataList, Finish);
 
             void Finish(bool ok, string error)
             {

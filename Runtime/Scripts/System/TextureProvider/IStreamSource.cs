@@ -4,17 +4,17 @@ using UnityEngine;
 namespace MyVerseXRSDK
 {
     /// <summary>
-    /// 推流画面源抽象。SDK 内置 2 个实现：<see cref="CameraStreamSource"/>、<see cref="RenderTextureStreamSource"/>。
-    /// 业务侧可自行实现本接口（如 XR 立体合成、多摄拼接、屏幕捕获等"喂画面工具"），
-    /// 通过 <see cref="TextureProviderSystem.SwitchSource"/> 注册即可纳入推流链路。
-    ///
-    /// 切源不断流约定：SDK 维护一张长生命周期 RT（VideoStreamTrack 绑定），
-    /// SwitchSource 时只 Detach 旧 source + Attach 新 source 到同一张 RT；
-    /// InternalRT 为固定尺寸（StreamConfig.StreamMaxLongSide 按 16:9），任意源可热切；
-    /// 推流会话活跃且已有源时 SwitchSource 会丢弃新源（一相机推流保护）。
+    /// 独立相机或普通外部RT的画面源。接受后由客户端拥有，拒绝时仍归调用方；不采集XR eye buffer或屏幕。
+    /// Attach/Detach/Tick均由所属Runtime在主线程调用；实现不得接入全局帧调度或销毁借用的业务对象。
     /// </summary>
     public interface IStreamSource : IDisposable
     {
+        /// <summary>借用的相机或纹理是否仍可用；失效后Runtime清源并继续输出黑帧。</summary>
+        bool IsAvailable { get; }
+
+        /// <summary>由所属Runtime驱动一次画面更新；不代表本帧已经被编码或送达。</summary>
+        void Tick(double now, int framesPerSecond);
+
         /// <summary>画面源宽（像素，仅信息展示用；不再参与 InternalRT 尺寸决策）。</summary>
         int Width { get; }
 

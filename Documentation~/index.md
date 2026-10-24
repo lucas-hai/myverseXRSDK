@@ -1,530 +1,267 @@
-# MVXRSDK 开发指南
+# MVXRSDK 4 接入指南
 
-> 本文档面向接入方，讲"怎么用、为什么这么设计"。**字段级签名、完整参数表、错误码全清单等细节**统一交给 [API 参考手册](api-reference.md)，本文在需要时以"详见 API 文档"指引，不在正文堆砌签名表。
->
-> 适用版本：MyVerse XR SDK **3.1+**，命名空间 `MyVerseXRSDK`，包名 `com.myverse.xrsdk`。
+> 命名空间：`MyVerseXRSDK`。本主版本不兼容 3.x C# API；后端 Protobuf、区域轴向和账务字段语义保持不变。版本号见 `package.json`，发布状态见 CHANGELOG。
 
----
+## 1. 架构与能力
 
-## 1. 概述
+```text
+MVXRSDK.Create(SdkOptions) → SdkClient
+  ├─ Session       房间接入、状态与外部会话租约
+  ├─ Space         地块匹配、逆校准、障碍物、区域地面
+  ├─ Devices       本机R帧采样、远端设备与虚影
+  ├─ Admission     开始游戏通知，不自动扣费或开局
+  ├─ Billing       显式积分验证、每次初始化成功一次
+  ├─ Director      仲裁请求与候选相机
+  ├─ Streaming     独立画面源、游戏音、WHIP/WebRTC
+  ├─ Recording     远端限时录制命令
+  └─ Diagnostics   当前实例的结构化错误
+```
 
-MyVerse XR SDK 是一套用于 XR（扩展现实）多人协作的 Unity 工具包，以嵌入式 UPM 包形式分发。它把房间、空间对齐、网络同步、推流、录屏、导播切镜等基础设施收敛到一个对外 Facade（`MVXRSDK`）后面，业务方只面对一个 `public static` 入口。
+运行时不再自动创建旧 `MVXRSDKManager`，不再使用静态 Manager/Module、全局事件总线或相机 Reporter。`Create` 才创建所属实例的常驻调度宿主。
 
-| 能力 | 一句话说明 | 业务入口（详见 API 文档） |
-|---|---|---|
-| **生命周期** | 初始化、反初始化、状态机查询 | `MVXRSDK.InitMVXRSDK` / `UnInitMVXRSDK` / `State` / `IsReady` / `IsConnected` |
-| **房间与连接** | 入房由 Init 网络阶段自动完成，无独立 JoinRoom | （无显式 API，连接态查询用 `State` / `IsConnected`） |
-| **空间对齐** | XR 偏移基准、多场景根节点偏移、障碍物实时同步 | `RegisterXROffsetNode` / `RegisterRootNode` |
-| **网络位置同步** | 多端位姿同步、远端虚影、同房间虚影开关 | `RegisterSelfNode` / `SetSyncSameRoomAvatar` |
-| **积分验证** | 中控事件 / 自助调用两种模式 | `OnTransactionVerification` 事件 / `TransactionVerification` 方法 |
-| **推流** | WebRTC（WHIP），由播控通过 NotifyLive 驱动 | `SetStreamSource` / `ClearStreamSource` + `OnPushStream*` 事件 |
-| **导播切镜** | 多机位请求，中控仲裁后被选中才推流 | `SendDirectorRequest` + `OnPushStreamStarting` |
-| **录屏信令** | 游戏主动触发，SDK 仅转发，服务端按时长自停 | `StartRecord` + `OnRecordResult` |
-| **全局错误聚合** | 一个订阅接所有失败路径 | `OnError` |
-
-> 本文是开发指南。每个 API 的完整签名、入参约束、错误码数值等，见 [API 参考手册](api-reference.md)。
-
----
+核心程序集为 `MVXRSDK.Contracts`、`MVXRSDK.Runtime`、`MVXRSDK.Editor`；分场景接入示例使用 `MVXRSDK.EditorDemos` 和 `MVXRSDK.EditorDemos.Editor`。自建 asmdef 的业务代码至少引用 Contracts、Runtime；Editor 和示例程序集不应成为业务 Runtime 的依赖。
 
 ## 2. 安装与依赖
 
-### 2.1 安装（嵌入式 UPM 包）
+Unity 2022.3 LTS，URP 为必需依赖。包清单声明：
 
-把整个 `com.myverse.xrsdk/` 目录直接放到宿主 Unity 工程的 `Packages/` 文件夹下：
-
-```
-<YourProject>/
-├── Assets/
-├── Packages/
-│   ├── manifest.json
-│   └── com.myverse.xrsdk/      ← SDK 包整体放这里
-│       ├── package.json
-│       ├── Runtime/
-│       ├── Samples/
-│       ├── Documentation~/
-│       └── ...
-└── ProjectSettings/
-```
-
-Unity 会自动识别 `Packages/` 下含 `package.json` 的目录为 local embedded package，**无需在 `manifest.json` 显式声明**，Package Manager 窗口会显示为 "MyVerse XR SDK"。
-
-### 2.2 依赖
-
-下列依赖已在 SDK 的 `package.json` 中声明，由 Package Manager 自动拉取：
-
-| 依赖 | 版本 | 用途 |
-|---|---|---|
-| `com.unity.webrtc` | 3.0.0-pre.8 | WebRTC（WHIP）推流 |
-| `com.unity.nuget.newtonsoft-json` | 3.0.2+ | JSON 序列化 |
-
-**URP（Universal RP）单独说明**：URP 与 SRP Core **不在** SDK 的 `package.json` 依赖里，由**宿主工程**提供——SDK 程序集 `MVXRSDK.asmdef` 通过 `references` 引用 `Unity.RenderPipelines.Universal.Runtime` / `Unity.RenderPipelines.Core.Runtime`，并对 URP / SRP Core **17.x** 定义 `versionDefines` 条件编译宏（`MV_URP_17_OR_NEWER` / `MV_SRP_CORE_17_OR_NEWER`，前向兼容）。当前宿主工程实测使用 **URP 14.0.11**，请确保宿主工程已安装并启用 URP。
-
-> 推流子系统与 NetworkFailureHUD 的着色器路径依赖 URP，务必保证宿主工程已正确配置。
-
-### 2.3 导入 Demo 示例与按键表
-
-Package Manager 窗口 → 选中 `MyVerse XR SDK` → `Samples` 标签 → `Demo` → `Import`，即可在 `Assets/Samples/` 下获得总控示例场景与脚本。Demo 已装配好 XR Rig（玩家相机）、用于自动接源的直播相机、场景根节点、地面与 Demo 总控 GameObject，覆盖启动模式、节点注册、积分、推流、切镜、录屏、全局错误监听等全部模块。
-
-打开场景直接 Play；在 Inspector 切 `initMode` + 填 `controlServerAddress` 后用如下按键触发各模块：
-
-| 按键 | 功能 |
+| 包 | 版本 |
 |---|---|
-| `I` | Init SDK |
-| `U` | UnInit SDK |
-| `T` | 自助积分验证 |
-| `R` | StartRecord |
-| `D` | 真链路切镜（`SendDirectorRequest` 自动接源重载，被选中后自动接相机） |
-| `X` | 热替换 XR Offset Node |
-| `K` / `S` | Editor 仿真 NotifyLive 启动 / 停止（Offline / WsDirect 均可跑） |
-| `Y` | 注销 Self Node（演示注销后位姿不再上报） |
+| `com.unity.webrtc` | `3.0.0-pre.8` |
+| `com.unity.nuget.newtonsoft-json` | `3.0.2` |
+| `com.unity.render-pipelines.universal` | `14.0.11` |
 
----
+可将完整包目录放到工程 `Packages/` 下，或通过 Package Manager 的本地 `package.json` 导入。使用 Git 分发时锁定**实际已发布**的 tag/commit；本地版本变更不代表远端已发布。不要同时保留旧 SDK DLL 或拷贝到 Assets 的旧脚本。
 
-## 3. 前置条件
+开发包直接打开 `Samples/EditorDemos/Scenes/`，不在同一工程重复导入；否则会出现同名示例程序集。发布脚本在临时分发副本中转换为 `Samples~/EditorDemos`，分发包通过 Package Manager 的 **Editor Integration Demos** 导入。七个场景分别展示连接、空间/设备、业务命令、直接WHIP、中控推流和跨场景；操作步骤见示例目录的README。旧联合Demo及其专用程序集已删除；升级时自行处理旧示例副本，避免其旧API调用参与编译。
 
-- **Unity 2022.3 LTS** 或更新版本。
-- 渲染管线为 **URP**（由宿主工程提供；当前工程实测 14.0.11，详见 §2.2）。
-- 目标设备 OpenXR 服务已初始化、可获取设备 SN 码。**推荐 PICO 4 / 4U（实测过）**，其它 OpenXR 设备兼容但未实测。
-- **必须先成功取到设备 SN，再调用 `InitMVXRSDK`** —— SN 是 SDK 初始化与中控识别的唯一标识。
-- 外部应用资源（若用到）存放路径约定为 `/storage/emulated/0/myverse/`。
+SDK 不直接引用 PICO 程序集；设备身份获取、XR Plug-in Management 和 Android 权限由宿主负责。目标仍为 PICO 4/4U；其他设备须自行验证。
 
-> SDK Runtime 不直接引用 PICO 程序集 —— 是否需要 PICO Integration SDK 取决于宿主工程的 XR Plug-in Management 配置。
+## 3. 生命周期与接入方式
 
----
+同一进程最多存在一个未完全释放的客户端。`Create` 捕获配置快照并校验输入；失败不占用单实例名额。
 
-## 4. 架构总览
+| 操作/状态 | 含义 |
+|---|---|
+| `Create` / `Created` | 已有本地实例，尚未启动网络 |
+| `Start()` / `Running` | 本地服务运行，不等于已经登录或完成校准 |
+| `Session.Current.IsJoined` | 当前房间已登录 |
+| `Space.Status.IsApplied` | 当前有效校准已应用到绑定 |
+| `Shutdown(completed)` | 延后到主线程调度点开始关闭，完成时资源已安全收敛 |
+| `Dispose()` | 立即发起非阻塞关闭；有在途 native 使用时仍保持 `Stopping` |
+| `Disposed` | 终态，不可重新 Start；此后才可 Create 下一实例 |
 
-SDK 采用三层分层，业务方只面对最顶层 Facade，下两层全部 `internal`、对业务不可见。
+### 三种会话模式
 
-```
-MVXRSDK (public static facade)        ← 业务方调用的唯一入口
-  └─ *Manager (internal)              ← 按业务域聚合：Room / Business / Stream / Space / NetworkTransform
-       └─ *Module (internal)          ← 单一职责单元：RoomModule / RecordModule / PushStreamModule …
-            └─ *System (internal)     ← 跨业务基础设施：Socket / Http / Event / Mono / Pool / WebRTC / TextureProvider / Audio
-```
+- **Directory**（正式，默认）：固定POST `http://localhost:8868/v1/vr/service/config`取得中控地址，再轮询分配、连接房间WS、登录。IP、端口和接口路径内置固定，接入方无需填写地址。
+- **ControlServer**：显式设置 `Session.ControlServerUrl`，跳过本机目录。这里传**中控 HTTP(S) 地址，不是房间 WS 地址**。
+- **External**：不建立原生网络连接；调用 `Session.OpenExternalSession(sessionKey)` 取得专属数据写入句柄。
 
-- **Facade 层（`MVXRSDK`，`public static partial class`）**：唯一对外入口，承担 Bootstrap、生命周期（Init/UnInit）、状态机、积分入口等。`DeviceId` 是 public 只读，但 `BaseUrl` / `RoomAllocationStatus` 等内部字段业务方读不到 —— **查询连接状态请用状态机属性（`State` / `IsConnected`），不要去找内部字段。**
-- **Manager 层（internal）**：每个 Manager 管一个业务域，业务无法也不应直接 new。
-- **System 层（internal）**：可复用基础设施。Manager 通过 EventSystem 横向解耦、SocketSystem 收发、MonoSystem 每帧驱动。
+### 正式与测试的共同连接流程
 
-### 自举启动引导
+| 阶段 | 正式 Directory | 测试 ControlServer | 观察点 |
+|---|---|---|---|
+| 取得中控地址 | POST固定本机接口；读取`data.serveIp`、账务`data.baseUrl` | 使用`ControlServerUrl`，不访问本机目录 | 正式经过Discovering；两者随后Allocating |
+| 轮询设备分配 | GET `{中控地址}/v1/open/api/device?id={DeviceId}` | 同左 | 默认前次请求结束后间隔1秒，不重叠；入房后仍继续 |
+| 取得房间地址 | 响应`Code == 0`，读取字符串`Data.CenterIp` | 同左 | 非空有效地址用于WS/WSS，不是另一个中控HTTP地址 |
+| 连接并登录 | 连接房间WS，发送`logic.Binding`，Token为DeviceId | 同左 | Connecting → Authenticating → Joined |
+| 接收空间数据 | 登录区域/后续推送；查询`logic.QueryGameSceneInfo`获取障碍物 | 同左 | Joined不等于空间Ready，需完整Rig和匹配地块 |
+| 未分配/房间解散 | `Data.CenterIp == ""`：无房时继续等待；已有房间则结束旧会话并继续轮询 | 同左 | 不卸载SDK，不重置该初始化周期的计费成功缓存 |
 
-SDK 的运行骨架是"自举"的 —— 业务方**无需手动创建任何 GameObject**：
+联调前协调中控网页控制台开房并拉入目标设备；DeviceId必须属于中控“设备管理”，随意填写不能完成登录。缺字段、null、错误类型或非法地址不是合法空字符串，SDK报告错误，不据此冒充房间解散。正式目录请求失败会进入Failed；不能将设备分配的持续轮询理解为目录发现也会自动重试。
 
-- `MVXRSDK.Init()` 标注 `[RuntimeInitializeOnLoadMethod(BeforeSceneLoad)]`，在首个场景加载前由 Unity 运行时自动调用，创建名为 `"MVXRSDKManager"` 的 GameObject，并在其上挂 `MonoSystem` 与 `MVXRSDKManager`。
-- 该根节点调 `DontDestroyOnLoad` 跨场景常驻，多场景切换不会丢失 SDK 运行时。
-- `MonoSystem` 是 SDK 内部所有 `Update` 钩子与协程的宿主（HTTP/IO 全部协程化承载于此）。
+连接实现依据：[NativeSessionConnection](../Runtime/Scripts/Client/Session/NativeSessionConnection.cs)。上表描述客户端行为，不承诺所有后端换房都必然先返回一次可观察的空字符串。
 
-> **关键区分**：Bootstrap 只搭骨架，**不**初始化 System 层。"根节点已存在" ≠ "SDK 已可用"。System 层要等业务显式调 `InitMVXRSDK` 才拉起。
+`Session.NetworkLimits` 控制单消息/解压、单方向队列字节/条数、每帧派发和待应答请求上限；超限返回或报告CapacityExceeded。设备与障碍物数量分别由Devices.MaximumDevices和Spatial.MaximumObstacles限制，Native与External同策略。默认值仅防失控，不是压测性能保证。
 
----
+`Session.BillingBaseUrl` 可显式提供账务端点；未配置且原生会话尚未取得端点时，账务操作返回不可用，不伪造通过。
 
-## 5. 初始化与启动模式
+### 最小绑定与启动
 
-### 5.1 两个 public 重载
+以下变量由宿主提供；生产 `deviceId` 应在设备身份获取成功后传入，不记录到日志。
 
 ```csharp
-// 重载一：等价于 Production 模式
-MVXRSDK.InitMVXRSDK(string deviceId);
-
-// 重载二：显式指定模式（controlServerAddress 默认 null）
-MVXRSDK.InitMVXRSDK(string deviceId, InitMode mode, string controlServerAddress = null);
-```
-
-正式接入业务方通常用单参重载即可。`deviceId` 入参严格校验（空 / 纯空白 / 超长 / 含非法字符均抛 `ArgumentException`），具体约束见 [API 文档](api-reference.md)。**调用时机：XR 服务初始化、SN 取到之后。**
-
-### 5.2 三档启动模式：本地阶段 + 网络阶段
-
-`InitMVXRSDK` 把启动拆成"本地阶段 + 网络阶段"。三档模式**共享本地阶段**（同步执行：拉起 System 层 → 装配五个不依赖网络的本地 Manager → 切到 `LocalReady`），仅网络阶段不同。
-
-| 模式 | 网络阶段动作 | `controlServerAddress` | `BaseUrl` | 积分验证 |
-|---|---|---|---|---|
-| **Production**（默认 / =0） | 本地 HTTP(`localhost:8868`) 拉中控地址 → 轮询房间分配 → 连房间 WS → 登录 | 忽略 | 由 HTTP 回调回填 | 可用 |
-| **WsDirect**（=1） | 跳过 `localhost:8868`，外部直传中控服地址，再走相同的房间分配轮询 + WS + 登录 | **必填**，为空则报错退回 `LocalReady` | 不回填（空） | 不可用（立即 `cb(false)`） |
-| **Offline**（=2） | 完全跳过网络阶段，停留 `LocalReady` | 忽略 | 空 | 不可用（立即 `cb(false)`） |
-
-> **WsDirect 关键澄清**：`controlServerAddress` 传的是**中控服地址**（如 `http://192.168.1.50:7015`），**不是**房间服 WS 地址；房间服 WS 地址仍由中控轮询响应分配返回。WsDirect 相对 Production 唯一省掉的就是 `localhost:8868` 拉中控地址这一跳，其余链路完全一致。
->
-> - `Production`：正式接入。
-> - `WsDirect`：开发期无 localhost 中控环境时测试网络链路。
-> - `Offline`：开发期测试推流 / 节点等本地能力（被 `Debug_SimulateNotifyLive` 配合可走通整条推流链路，见 §7）。
-
-### 5.3 状态机与查询属性
-
-SDK 用 7 态枚举 `MVXRSDKState` 表达完整生命周期：
-
-```
-NotInitialized → Initializing → LocalReady → Connecting → Connected
-                                     ↑                          ↕
-                                     └────────  Disconnected ───┘
-                                     ↑
-                       (UnInit) Disposed → NotInitialized
-```
-
-- `Offline` 模式终态停在 `LocalReady`；`Production` / `WsDirect` 登录成功后切到 `Connected`。
-- 网络阶段失败（HTTP 拉取失败 / WsDirect 地址缺失）从 `Connecting` 退回 `LocalReady`。
-- 掉线 / 房间解散：`Connected` 或 `Connecting` 降为 `Disconnected`，重连成功重新登录回到 `Connected`。
-- `UnInit` 先置 `Disposed`（瞬时收尾态）再复位为 `NotInitialized`（对外稳定终态）。
-
-业务方常用查询属性：
-
-| 属性 | 含义 | 判什么 |
-|---|---|---|
-| `MVXRSDK.State` | 当前生命周期枚举 | 原始状态 |
-| `MVXRSDK.IsReady` | 本地是否就绪（覆盖 `LocalReady`/`Connecting`/`Connected`/`Disconnected`） | 能否调本地能力 API（如 `SetStreamSource`） |
-| `MVXRSDK.IsConnected` | 是否已成功连接中控（仅 `State == Connected`） | 能否调需要联网的业务 API |
-| `MVXRSDK.IsInitializing` | 是否正在本地阶段（仅 `State == Initializing`） | Init 进行中 |
-
-> **入房由 Init 自动完成，没有 `JoinRoom` / `LeaveRoom`。** "入房"是 Production / WsDirect 网络阶段（房间分配轮询 → 连 WS → 登录）的自动结果；"离房"即 `UnInitMVXRSDK`。需要判断是否在房间里，用 `IsConnected`。遇到 `Disconnected` 不要急着重建，等内部重连自愈或主动 UnInit。
-
----
-
-## 6. 核心概念
-
-### 6.1 房间与连接
-
-**链路全貌**：中控拉址（仅 Production）→ 每 1s 轮询房间分配 → 分配到 IP 后连房间 WS → 用 `DeviceId` 作 Token 登录 → 登录成功置 `Connected`、上报在线、广播成员列表 → 服务端解散 / UnInit / 应用退出时统一经 `OnDisbandRoom` 退房（先上报 offline 再关 WS）。SDK **无独立退房 API**。
-
-**重连退避**：WebSocket 连接失败后按指数退避自动重连 —— 初始 **2s**、按 `2·2^(n-1)` 增长并封顶 **30s**、叠加 ±10% 抖动、**最多 5 次**。耗尽 5 次仍失败则停止重连，若曾连上过则降为 `Disconnected`，并抛出对外事件标记重连失败。
-
-**NetworkFailureHUD 遮罩**：重连耗尽事件到达时，SDK 在玩家相机正前方 1m 弹出黑色半透明遮罩 + 文案「网络连接失败，请退出重试」。遮罩以已注册的 Self 节点（玩家相机）为父；相机节点未注册时仅打警告、不显示。该 HUD 单例，UnInit 时销毁。
-
-### 6.2 空间对齐
-
-空间数据由 WS 推送驱动（登录后先拉一次全量，之后实时推），缓存在 SDK 内部 Store，与 GameObject 解耦。涉及两类业务可注册的节点：
-
-- **XR 偏移节点（`RegisterXROffsetNode`）**：作为所有障碍物 GO 的挂载父节点 —— 障碍物坐标都在 XR 偏移节点本地空间下。不变量：有障碍物 ⟹ XR 偏移节点已注册。
-- **场景根节点（`RegisterRootNode`，支持多个）**：与 XR 偏移节点**相互独立**。SDK 遍历所有已注册根节点写入 `localPosition` / `localEulerAngles`。注册时机晚于推送也安全 —— 新注册节点会立即按当前生效数据源回放一次。
-
-#### 场景根节点驱动（Region 体系，唯一驱动源）
-
-- 登录响应 `regionInfo` 携带首帧 + 运行中 `RegionInfoPush` 变更推送（全量快照覆盖）。SDK 用远端实际长宽生成临时 id（**取绝对值后截断取整**，不四舍五入，按远端 tagId 形态拼 `宽x长`、小写 x，如 `len:12.35, width:6.18` → `6x12`）匹配本地地块条目（地块编辑器产出，见 §12.2），按层级刚体变换驱动根节点（世界位姿）——A=远端区域为父节点、B=游戏偏移为子节点、C=本地地块与 A 同级：
-  ```
-  rot = Rotate(区域rotation) · Rotate(gameOffsetRotation)             （B 相对 A 的世界旋转，四元数组合；地块rotation 不参与）
-  pos = 区域center + Rotate(区域rotation)·gameOffset − 地块position     （先求 B 世界位置，再减 C）
-  ```
-  语义：`center/rotation` 是区域 A 自身位姿；`gameOffset/gameOffsetRotation` 是 **B 相对 A** 的偏移（B 是 A 的子节点，**被 A 旋转带动**）；地块=**本地区域 C，与 A 同级**（世界层级），只有 `position` 参与、且**不被 A 旋转带动**（世界层级直接相减），`rotation` 不参与。计算结果是**世界位姿**，赋给场景根节点。`RegionInfo.offset/offsetRotation` 已废弃，不参与计算。
-  匹配不到地块 / 未提供 `Resources/MVXRSDK/LocalRegionData` 资产时根节点保持原位并告警。仅登录首帧或长宽变化时重查地块，纯游戏偏移变更复用缓存。
-- **旧 `GameScenePush` 的 Offset/Rotation 根节点偏移功能已废弃**：新版客户端不解析（后端为老版本客户端保留字段）；未接入 Region 的房间（`regionInfo` 为空）根节点不偏移。障碍物同步（SceneData）不受影响，注册接口 `RegisterRootNode` 系列不变。
-- Offline 模式无网络阶段，SDK 不会自行收到 Region 推送；可配合下述注入接口使用（服务端形态）。
-
-#### 本地区域地块显示（自发光可视物）
-
-- Region 快照的 `GameInfo.showFloor` 字段控制**是否显示本地区域地块**：`true` 且远端长宽命中本地地块条目时，SDK 实例化一块自发光半透明矩形（尺寸 = 地块 长×宽；**位置/旋转 = 区域对齐计算结果，与场景根节点同一世界位姿**），标出该区域；`false` / 无匹配地块则不显示。地块匹配走**激活环境组**且要求**封签有效**（验签失败整组拒用，见 §12.3）。
-- **独立常驻对象**：可视物是独立场景根对象（不挂 XR / 场景根节点）+ `DontDestroyOnLoad`——区域是物理固定的，地块**跨场景常驻、不随场景卸载删除**；位姿用区域计算的世界坐标，不依赖 XR 偏移节点。
-- **自发光**：可视物用 Unlit 材质（不受场景光照 / 烘焙影响），第三方工程即使用烘焙光（lightmap），运行时动态实例化的地块也照常可见——这是"自带光"的技术含义（自发光 ≠ 依赖 lightmap，而非加 Light 照亮环境）。
-- 显隐随推送实时切换（可视物复用 `SetActive`，不反复建销毁）；仅 UnInit 时销毁。渲染是**客户端语义**——服务端形态（SDK 在服务端跑、无相机）虽也会建出该对象但无画面输出；服务端不希望建对象时，自身不下发 `showFloor=true` 即可。
-
-#### 服务端形态（宿主自持中控连接）
-
-游戏服务端等宿主若用**自己的消息链路**连中控（SDK 不建连接），接入方式：
-
-1. `InitMVXRSDK(serverId, InitMode.Offline)`——本地就绪即可，无网络阶段；
-2. 宿主收到登录响应 `regionInfo` 首帧 / `RegionInfoPush` 推送后调 **`MVXRSDK.ApplyRegionInfo(push)`** 注入（全量快照幂等，重复注入以最后一次为准）。宿主工程若有**自有同名 PB 生成类**（类型遮蔽，无法直接传 SDK 类型实例），改用 **`ApplyRegionInfo(byte[])`** 字节重载：消息回调原始 buffer 直接透传，登录响应字段用 `loginRsp.RegionInfo.ToByteArray()`；
-3. SDK 完成地块匹配 + 区域公式计算后触发 **`MVXRSDK.OnRegionApplied(position, eulerAngles)`**——宿主把位姿写进自己的同步通道（如 FishNet SyncVar）分发给游戏客户端，可完全不注册根节点；晚订阅补齐用 **`MVXRSDK.TryGetRegionPose(out pos, out euler)`**（无匹配/未收到快照返回 false）。
-
-工程内同样需要地块编辑器产出的 `Resources/MVXRSDK/LocalRegionData` 资产（匹配键，见 §12.2）。
-
-> **对直连接入方零影响**：服务端形态是纯增量通道。联网模式（Production/WsDirect）下 SDK 自行接收推送、驱动注册根节点的既有流程完全不变，无需调用注入接口、无需订阅新事件；`OnRegionApplied` / `TryGetRegionPose` 在联网模式下同样可用（可选能力，不用不感知）。
-
-**障碍物**按服务端列表与本地 diff 实时增删改（新增实例化、消失回收、变更则原地更新或重建），分椭圆 / 矩形两类，走对象池。每个障碍物可选距离检测：靠近玩家才显示。
-
-> 节点注册遵循统一容错约定（见 §6.3 末），未注册时对应功能静默不启用、不报错。
-
-#### 场景偏移的下发时机与锚点
-
-正式流程中，场景偏移由中控在**开始游戏时下发一次**（不是运行中持续实时调整）。在**布店 / 实景部署**阶段，则需要通过中控**手动调整**场景，使虚拟场景对齐到真实空间中的摆放位置。
-
-- 建议在设计初始场景时，预留**动态节点作为锚点**交给偏移节点作参考，便于部署期对齐；
-- **无需考虑静态节点的实时调整** —— 静态物体不参与运行期的实时偏移（原因见下）。
-
-#### 动静节点分离（重要）
-
-场景根节点偏移只改根节点自身的 `Transform`。被标记为 **Static（尤其 Batching Static）** 的子物体会被 Unity 静态批处理烘入合并网格、世界坐标固定，**不会跟随根节点偏移**。
-
-因此建议把场景里的**动态节点与静态节点分离**，并按下面顺序加载：
-
-1. **先 `RegisterRootNode`** 注册根节点并完成偏移；
-2. **再激活静态节点** —— 让静态物体在"偏移后的最终位置"上才被批处理烘焙，从而与动态部分对齐。
-
-### 6.3 网络位置同步与虚影
-
-- **本机上报（Reporter）**：`RegisterSelfNode` 注册玩家相机后，SDK 在该节点上自动挂 `NetworkTransform`（Reporter 角色），按 **0.2s 间隔**比对阈值上报位姿 —— 仅 XZ 平面位移超 **0.001m** 或 Y 转角超 **0.5°** 才发，且只在房间已分配时上报。
-- **远端接收（Receiver）**：远端成员位姿经 WS 推送，落入虚影 GO 上的 `NetworkTransform`（Receiver 角色），做位置 Lerp + 旋转 Slerp 平滑插值，并切换 move/idle 动画。
-- **显示距离判定**：以本机 Self 节点为参考，虚影与本机 XZ 平面距离在阈值内才从对象池创建虚影，超出则回收（保留快照可重建）。阈值分两种 —— **其他房间虚影固定 2m**；**同房间虚影由外部传参，默认 2m**（见下方开关）。Self 节点未注册时退化为"全部较近"并打警告。
-- **本机自己一律不显示**：无论同房间还是其他房间，SDK 都会按 `DeviceId == 本机` 过滤位置推送，不为自己创建虚影。
-- **同房间虚影开关与距离（`SetSyncSameRoomAvatar(enable, displayDistanceMeters = 2f)`，默认关）**：默认**只为"非本房间"成员创建虚影**，本房间成员位置推送被跳过。开启后本房间推送才会创建虚影（成员静止不上报时需等其移动后出现），其显示距离取 `displayDistanceMeters`（米，默认 2m，`<=0` 回退 2m，仅开启时生效）；关闭时立即回收已创建的本房间虚影（不影响非本房间）。任意时机可调。
-
-> **`NetworkTransform` 组件由 SDK 内部管理**（注册 Self 节点时自动挂 Reporter，远端虚影自动挂 Receiver），业务通常无需直接操作 —— 了解即可。其 `MessageType` 枚举为 `None=0 / Reporter=1 / Receiver=2`，Reporter 只上报不接收、Receiver 只接收不上报，角色互斥。
-
-#### 统一容错约定
-
-XR Offset / Self / Scene Root 三类节点**任何时机皆可注册**（Init 前/中/后）：SDK 读取节点的所有代码都做了 null 检查，未注册时对应功能静默挂起、不报错，节点（重新）注册后各模块自动回放恢复。重复传入不同节点视为热替换，同一节点重复注册无副作用；被外部销毁的节点会在下次更新时自动剔除。
-
-> **关于错误码 `NodeAlreadyRegistered`(6002) / `XROffsetAfterInit`(6003)**：API 文档会如实列出这两个 6xxx 码值，但它们与上述"节点注册任意时机皆可、同节点幂等、不同节点热替换"的现行约定表面冲突 —— 当前实现以"任意时机皆可"为准，该码是否实际触发以实现为准。
-
-### 6.4 积分验证
-
-业务需在积分扣除验证成功后才真正开始体验内容（**包名需提交到管理后台**，否则验证失败影响收益）。两种模式二选一：
-
-```csharp
-// 模式 A：通过中控启动游戏 —— 订阅事件
-MVXRSDK.OnTransactionVerification += isResult => { if (isResult) { /* 开始内容 */ } };
-
-// 模式 B：不接入中控 —— 体验前主动调用
-MVXRSDK.TransactionVerification(isResult => { if (isResult) { /* 开始内容 */ } });
-```
-
-> 积分验证强依赖 `BaseUrl` —— **仅 Production 模式可用**；WsDirect / Offline 会立即回 `false`。两条路径独立、不会重复扣费，但同时用容易导致业务侧重复处理，建议二选一。
-
----
-
-## 7. 推流与导播
-
-### 7.1 推流模型：完全由播控 NotifyLive 驱动
-
-**推流发起权不在客户端。** SDK 不存在"主相机自动推流"或"调个 StartStream 就开推"的概念。是否推、推到哪个流媒体地址，完全由播控经 WebSocket 下发的 `NotifyLive` 消息决定。SDK 收到后用 WHIP / WebRTC 把一张固定尺寸的内部 RenderTexture 推出去 —— 握手、SDP、编码、传输全部 SDK 内部完成，业务只需"在被选中时提供画面源"。
-
-推流状态事件：
-
-```csharp
-MVXRSDK.OnPushStreamStarting += ip     => { /* 被选中，握手期，立刻接源 */ };
-MVXRSDK.OnPushStreamStarted  += ip     => Debug.Log($"推流已开始 ip={ip}");
-MVXRSDK.OnPushStreamStopped  += reason => MVXRSDK.ClearStreamSource();  // reason: StreamStopReason 枚举
-MVXRSDK.OnPushStreamFailed   += (code, msg) => Debug.LogError($"推流失败 {(int)code}: {msg}");
-```
-
-> **`OnPushStreamStarting` 是"本机被选中"的唯一权威信号**，比 `OnPushStreamStarted`（握手完成）早约 1~2s。业务必须在 `OnPushStreamStarting` 回调里 `SetStreamSource` 接好画面源，才能保证首帧即有画面；**没收到这个事件就不要接源**（否则相机白渲染）。未接源时 SDK 推黑帧等待，不会失败。
->
-> SDK 对运行时可恢复错误（ICE/DTLS 失败、连接丢失）会用缓存 URL 自动重试（默认 2s/5s/10s）；4xx 鉴权、404、codec 不支持、无源等配置类错误不重试。
-
-### 7.2 导播切镜：中控仲裁，受理 ≠ 被选中
-
-多个客户端各自调 `SendDirectorRequest(DirectorRequestOptions[, Camera])` 请求成为推流机位，**中控只选一台**。
-
-```
-业务调 SendDirectorRequest(opts)
-    ──WS──→ 中控仲裁 → OnDirectorRequestResult(bool)   // 受理结果，受理 ≠ 被选中
-被选中：中控 → NotifyLive(start) → OnPushStreamStarting(ip)
-        业务在此回调 SetStreamSource(...)
-被替换：中控 → NotifyLive(stop) → OnPushStreamStopped
-        业务在此回调 ClearStreamSource()
-```
-
-请求参数 `DirectorRequestOptions` 关键字段（完整定义见 [API 文档](api-reference.md)）：`Source`（机位来源 —— `"unity"`=本机 Unity 机位，空 / `"mr"`=原直播，空是合法协议值不做默认填充）、`Lenses`（镜头数 1/2/3/4）、`DurationSec`（本段时长，必须 > 0，到期服务端停流）、`Record`（是否录制本段）、`FileName`（录制文件名，仅 `Record=true` 时有意义）。
-
-> - **不要把 `OnDirectorRequestResult(true)` 当作"我会推流"** —— 它只表示请求被受理。是否被选中以 `NotifyLive(start)`（即 `OnPushStreamStarting`）为准。
-> - **`OnDirectorSelected` 事件仅协议透传**（中控仲裁结果 deviceId/isPrimary/slot/duration），v3 起业务通常无需处理，保留作日志/观测用途。
-> - **被替换与服务端主动停流，对外停流原因统一为 `StreamStopReason.ServerStop`**，业务无法据 `reason` 区分二者。
-
-### 7.3 画面源生命周期
-
-业务用 `SetStreamSource` 接画面源。SDK 提供两个开箱即用的画面源 public 类：
-
-- **`RenderTextureStreamSource`**：业务自渲染到任意 RT 后交给 SDK（每帧一次 Blit 到 InternalRT；非 16:9 会被拉伸）。
-- **`CameraStreamSource`**：让一台相机直接渲染到 InternalRT（零 Blit，GPU 开销 ≈ 0），适合"专门挂一台直播相机"。
-
-```csharp
-// 自动接源（推荐）：请求 + 被选中后自动接相机，停流自动清
-MVXRSDK.SendDirectorRequest(opts, myDirectorCamera);
-
-// 手动接源（精细控制）：订阅事件自己接 / 清
-MVXRSDK.OnPushStreamStarting += _ => MVXRSDK.SetStreamSource(new CameraStreamSource(myDirectorCamera));
-MVXRSDK.OnPushStreamStopped  += _ => MVXRSDK.ClearStreamSource();
-MVXRSDK.SendDirectorRequest(opts);
-```
-
-设计要点：
-
-- **InternalRT 固定尺寸**：由 `StreamConfig.StreamMaxLongSide` 按 16:9 算出（默认 1280×720），**与画面源尺寸无关**，任意源可热切。RT 生命周期 = Init→Dispose，`ClearStreamSource` 只清黑不释放（改尺寸需 UnInit→Init）。
-- **无源推黑帧**：被选中还没接源、或推流中清源，都不卡死，推黑帧直到重新接源。
-- **一相机推流保护**：推流会话活跃且已有源时，再次 `SetStreamSource` **直接丢弃新源**（不排队、不抢占），保护观众画面；会话活跃但无源（黑帧等待）或会话空闲时才允许接 / 换源。`ClearStreamSource` 不受此限。
-- **自动 vs 手动**：手动接源优先于自动 —— 自动接源时机在 `OnPushStreamStarting` 之后消费，发现业务已手动接则放弃自动接（Info，非告警）。**谁接的谁清**：SDK 自动接的源停流自动清，业务手动接的源由业务自清，互不误清。
-- **多场景约定**：相机是场景对象、随场景销毁；推流会话是 SDK 层（`DontDestroyOnLoad`）的，可横跨切场景。**场景卸载前主动 `ClearStreamSource()`**（SDK 对相机销毁有自保护兜底，但那是误用防护，不是正常路径）。
-
-### 7.4 音频：仅游戏音
-
-推流音频只有一路 —— **游戏音**，业务通过 `PushGameAudioPcm(pcm, sampleRate, channels)` 推入（典型挂在 AudioListener 同 GameObject 的 `OnAudioFilterRead`）。**SDK 不采集麦克风、不碰麦克风设备、不与语音 SDK 抢麦。** 业务不推 PCM 则音频通道静音，不影响视频。
-
-工作采样率跟随设备输出率（`AudioSettings.outputSampleRate`，PICO 4U 实测 24000）：等率直通零重采样、异率线性插值重采样 —— **所以直接传 `AudioSettings.outputSampleRate` 即可，任何设备都不必关心具体值**。支持 8000–192000 Hz、mono / stereo（stereo 内部平均成 mono）。
-
-> 用 SDK 提供的推流装配组件（拖 `AudioListener` 进对应字段）时无需手调此 API，组件内部自动采集推送。
-
-### 7.5 录屏：游戏触发，SDK 仅转发，服务端按时长自停
-
-录屏由游戏侧主动调 `StartRecord(StartRecordOptions)` 发起。**SDK 不做任何实际录制**，只把参数打成 pb 经 WS 转发给播控（请求-应答模型），所有字段由游戏侧填充。
-
-```csharp
-MVXRSDK.OnRecordResult += (code, errMsg) =>
+var client = MVXRSDK.Create(new SdkOptions
 {
-    if (code == MVXRSDKErrorCode.Ok) Debug.Log("录屏请求已被服务端接受");
-    else Debug.LogError($"录屏失败 {(int)code}: {errMsg}");
-};
-MVXRSDK.StartRecord(new StartRecordOptions { DurationSec = 30, FileName = "battle-round-3", /* ... */ });
+    DeviceId = deviceId,
+    Session = new SessionOptions
+    {
+        Mode = SessionConnectionMode.ControlServer,
+        ControlServerUrl = controlServerUrl
+    }
+});
+
+var binding = client.Space.BindRig(
+    new SpatialRigBinding(motionRoot, calibrationRoot, trackingRoot, head));
+if (!binding.Success)
+{
+    Debug.LogError(binding.Result.Message);
+    client.Dispose();
+    return;
+}
+var started = client.Start();
+if (!started.Success) { Debug.LogError(started.Message); client.Dispose(); }
 ```
 
-> 录屏是**限时模式**：录多久由 `DurationSec` 控制，到时由**服务端自动停止**。本期**没有 `StopRecord` 接口** —— 客户端无法主动停录。`StartRecordOptions` 字段与录屏错误码见 [API 文档](api-reference.md)。
+保留 `client` 和 `binding.Handle`。切换 XR 层级时可事务式重新 BindRig；旧句柄释放不会解除新绑定。场景卸载前释放绑定，客户端本身可跨场景；整个业务结束时再 Shutdown。不要手动销毁 SDK 调度宿主。
 
-### 7.6 Editor 离线调试入口
+## 4. 空间坐标与节点所有权
 
-手测脚本可模拟服务端推送，**无需 WS 连接**也能跑通整条推流链路（真 WHIP POST + 真 WebRTC 协商），事件链路与正式 NotifyLive 完全一致；Offline 模式下这是唯一能启动推流的入口：
+推荐层级：
+
+```text
+MotionRoot                         业务移动层B（业务拥有）
+└─ CalibrationRoot                专用校准层C（SDK独占写入）
+   ├─ TrackingRoot / CameraOffset  XR追踪层（宿主/XR系统拥有）
+   │  └─ Head / Hands
+   └─ MVXRSDK.PhysicalProxies      SDK创建的柱子、虚影和区域地面
+```
+
+- 地图保持规范游戏场地坐标 **G**，SDK 不移动地图。
+- 服务端区域、障碍物及设备位姿使用协议房间坐标 **R**。
+- `GameToRoom` 为 **T=G→R**；`RoomToGame` 为 **C=T⁻¹**。
+- `MotionRoot` 的世界刚体变换为 **B**。最终 `pW = B × C × pR`。
+- SDK 只写 `CalibrationRoot.localPose` 以及自有代理，不写 MotionRoot、TrackingRoot、Head、Hands。
+- CalibrationRoot 必须独占、初始为单位位姿；相关节点及祖先必须单位缩放。
+
+保留原协议正向公式：
+
+```text
+q = regionRotation × gameOffsetRotation
+t = regionCenter + regionRotation × gameOffset − tilePosition
+C.rotation = inverse(q)
+C.position = inverse(q) × (−t)
+```
+
+地块 rotation 不进入 T。不能只把 t 取负充当完整逆变换。
+
+默认 **HorizontalYaw**：高度容差 0.001m、pitch/roll 容差 0.5°；容差内归零，超出拒绝，不静默截断。**Rigid3D** 保留完整刚体变换，但网络位姿协议仍只发送 XZ/yaw。
+
+`Space.TryGetRoomPose` 从 Head 相对 CalibrationRoot 的变换采样，包含 Camera Offset 等下层偏移；不能用 `Head.localPosition` 替代。`TryRoomToWorld` 使用当前绑定组合 B×C，`TryWorldToRoom` 使用其逆将任意世界位姿转回R帧，包含MotionRoot当前业务移动。双向查询不修改节点；参考帧失效、外部争写、非单位缩放或输入非法时返回false、输出default，不能用StaleHold继续转换。
+
+### 状态与重连
+
+- 无绑定、缺区域或地块不匹配时，表现不启用；查询明确区分 `Unbound`、`WaitingForRegion`、`Unavailable`。
+- 计算成功不等于应用成功，分别看 `TryGetCalibration` 与 `Status.IsApplied`。
+- 重连时保持上一 C，但标记为陈旧，不继续把它当作有效上报参考帧；等待新代次有效区域。
+- 外部改写 CalibrationRoot 会失去应用有效性，SDK 不抢写覆盖业务数据。
+- XR recenter/追踪原点改变后调用 `InvalidateTrackingOrigin()`；External 模式必须重新开会话并提供新帧数据。
+
+### 区域、障碍物与虚影
+
+地块默认加载 `Resources/MVXRSDK/LocalRegionData`，按激活环境组验签、索引。规格 id 保持**宽x长、小写 x、绝对值截断取整**。可通过 `Spatial.TileSource` 注入自有只读地块源。
+
+障碍物按 Id 全量差分；等数量换 Id、尺寸变化和形状切换都会重新处理。矩形保持 Len→X、Width→Z 的协议映射。距离与虚影采样在 R 坐标内，不受业务移动层 B 干扰。
+
+区域地面使用 **Region 自身 Center/Rotation/尺寸**，作为代理根的子对象；不再作为独立常驻地图根显示，也不把 T 或 C 当作它的局部位姿。
+
+设备字典只读且排除本机。按RoomId区分同房与不同房：**不同房虚影默认启用、距离2m；同房默认关闭**。`Devices.SetSameRoomVisibility(true, distance)` 开启后，同房和不同房虚影可以同时显示，不是二选一；关闭只隐藏同房表现，不丢弃缓存、不关闭不同房显示。静止远端也会在本机靠近时重新评估可见性。
+
+柱子与人物虚影是**真实空间防碰撞的视觉提示**，但当前实现不是完整安全保障：表现依赖有效空间参考帧及后端广播；断线/校准失效会隐藏或清理表现，不能把“未显示”理解为“现实中无障碍/无人”。远端设备没有位姿时间戳过期判定，缺少退出消息时可能保留最后位置；跨房广播还须由中控提供同一物理坐标基准。柱子显隐基于XZ中心距离加尺寸估算，不是精确柱面距离；需在现场验证距离、延迟和失效处置。
+
+实现依据：[DevicePresenceService](../Runtime/Scripts/Client/Devices/DevicePresenceService.cs)、[RemoteDeviceStore](../Runtime/Scripts/Client/Devices/RemoteDeviceStore.cs)、[ObstaclePresenter](../Runtime/Scripts/Client/Space/ObstaclePresenter.cs)。当前SDK没有柱子/虚影专属的暂停、透视、声音或震动失效兜底。
+
+`ComputeOnly` / `Disabled` 模式须同时关闭 `Spatial.ShowObstacles`、`Spatial.ShowFloor`、`Devices.ReportingEnabled`、`Devices.AvatarsEnabled`，否则配置校验拒绝矛盾组合。
+
+## 5. 外部数据源
 
 ```csharp
-#if UNITY_EDITOR
-MVXRSDK.Debug_SimulateNotifyLive("192.168.1.100", start: true);
-#endif
+// 客户端须以External模式Start；每次开会话都会使上一个writer失效。
+var writer = client.Session.OpenExternalSession("room-session-key");
+writer.ApplyRegion(1, regionUpdate);
+writer.ApplyObstacles(1, obstacleSnapshot);
+writer.UpsertDevice(1, devicePose);
+// 位姿、障碍物、区域和Live各有独立revision；设备域不是每个device独立计数。
 ```
 
----
+输入限主线程，revision 必须递增。非法输入不消耗 revision；旧代次返回 `StaleGeneration`。不要把服务器 PB 对象暴露到业务层或绕过 writer 调内部服务。
 
-## 8. 平台与 WebRTC 约束
+External 联调开流使用 `writer.NotifyLive(revision, fullWhipUrl, true)`，停流传 false。URL 必须是完整 HTTP(S) WHIP 地址，不是单独 IP。此操作会真实创建媒体会话，不是纯画面模拟；不要把含凭据的地址写日志。
 
-推流子系统建立在 `com.unity.webrtc 3.0.0-pre.8` 上。以下为**要点级**说明，详细配置项、默认值、约束表交给 [API 文档](api-reference.md) 的 `StreamConfig` 章节。
+## 6. 游戏准入、扣费与远端命令
 
-- **PICO / Vulkan 历史坑（已收窄）**：2026-05 实测故障是 **Vulkan + FDM 注视点渲染下读 XR eye buffer（multiview Tex2DArray）内容错乱** —— 坑在**采集层**，编码 / 传输当时即正常。v3 推流源是独立相机直渲普通 RT（不读 eye buffer），该风险点不在链路上，**构建可用 Vulkan**。约束保留：**禁止新代码从主相机 / eye buffer / 屏幕抓帧走 Vulkan**，否则会复现错乱。
-- **RT 尺寸上下限**：编码器对绑定 RT 有最小尺寸要求（145×49），SDK 在会话入口预检、低于即 fail-fast；最大支持到 4096×4096。内部 RT 固定 16:9、偶数对齐（H.264 要求）。
-- **H.264 强制**（`ForceH264` 默认 true）：局域网 + PICO 推荐。若该 WebRTC 构建没编进 H.264 编码器，offer 不含 H.264 payload 会被提前拦截报错，而非等流媒体服务器拒绝才暴露。
-- **BWE 慢启动与 `VideoMinBitrate`**：libwebrtc 默认初始 BWE 仅约 100kbps，GCC 拥塞控制会把 fps 降到 2-5 直到带宽爬升完（实测约 40s），期间接收端会 dup 帧卡死。SDK 用 `VideoMinBitrateKbps`（默认 1500）给 sender 设 `minBitrate`，强制从首帧起按目标码率输出。前提是局域网上行充足；`minBitrate ≤ maxBitrate`。
-- **仅局域网，无 STUN/TURN**：不配任何 STUN/TURN，依赖局域网 host candidate，走 non-trickle ICE。**保持 PICO 与流媒体服务器同子网**，避免公网链路。STUN/TURN/Token 刷新等公网容错按约定省略。
+`Admission.StartRequested`通知本机开始游戏请求，由业务处理开局；SDK不在这条链中发扣费HTTP。中控启动与自助扣费是不同接入方式，不应把收到中控通知自动串接成一次自助扣费。
 
----
+自助接入显式调用`client.Billing.VerifyAccess(completed)`，遵守“初始化一次，扣一次费”。当前客户端成功后，后续调用都返回缓存；房间重连/解散/重入、场景切换或同周期新一局不触发重扣。完整释放后创建新客户端才开启新周期，不按整个进程永久去重，也不提供任意周期标识或关闭缓存开关。账务字段仍遵守既有后端契约；SDK不在初始化时自动扣费，不自动重试可能重复扣费的请求。
 
-## 9. 最佳实践
+账务、导演和录制返回 `OperationHandle`；完成回调为 `OperationResult`，至多一次且延后派发。结果含 RequestId、TargetId、WasCached、RemoteOutcomeUnknown。`Cancel()` 仅取消本地等待，不撤销已发出的服务端动作；未知远端结果不能当作明确失败后直接重发。
 
-### 9.1 推荐调用顺序
+录制按目标类型和目标 Id 做在途互斥：不同目标可并发。`Recording.Start` 成功只表示命令受理，不表示文件已完成。SDK 不做本地视频录制，也没有主动 StopRecord。
+
+## 7. 导演、画面源与游戏音
+
+导演请求示例：
 
 ```csharp
-// 1. 注册节点（任意时机可调，可在 Init 后；这里放 Init 前更直观）
-MVXRSDK.RegisterXROffsetNode(xrOffsetNode);   // 障碍物挂载基准
-MVXRSDK.RegisterSelfNode(playerCamera);        // 玩家相机，启用本机位姿上报与近远判定
-
-// 2. 全局错误监控（尽早订阅，覆盖整个生命周期）
-MVXRSDK.OnError += (code, msg, sourceModule) =>
-    Telemetry.Report($"SDK error from {sourceModule}: {(int)code} {msg}");
-
-// 3. 初始化（单参 = Production；开发期可用 WsDirect / Offline 重载）
-MVXRSDK.InitMVXRSDK(deviceId);
-
-// 4. 场景根节点（可选，支持多个）
-MVXRSDK.RegisterRootNode(rootNodeA);
-MVXRSDK.RegisterRootNode(rootNodeB);
-
-// 5. 积分验证（二选一）
-MVXRSDK.OnTransactionVerification += OnVerificationResult;   // 中控触发
-// 或
-MVXRSDK.TransactionVerification(OnVerificationResult);        // 自助调用
+client.Director.Request(new DirectorRequest
+{
+    Source = "unity",
+    AutoCamera = directorCamera,
+    DurationSeconds = 30
+}, result => Debug.Log("导演请求受理结果：" + result.Success));
 ```
 
-### 9.2 全局错误监控
+受理 ≠ 选中 ≠ 已连接。`Director.Selected` 为协议观察事件；本机新有效开流意图到达后触发 `Streaming.Starting`，媒体连接完成后 State 为 `Streaming`。自动恢复不再次消费导演候选，也不再次发布新的选中信号。
 
-一个 `OnError` 订阅即可接全部失败路径（推流 / 录屏 / Socket / HTTP / 积分），回调参数为 `(MVXRSDKErrorCode code, string msg, string sourceModule)`。错误码可 `(int)` cast 用于埋点 —— 数值序号是稳定契约。
+- 有 `AutoCamera` 时，SDK 在被选中后自动接源；手动源优先；自动源在控制会话终止时释放。
+- 无相机时空 Source 保留为空（原直播合法值）；指定 AutoCamera 且空 Source 才补 `unity`。
+- 候选相机有代次与过期限制；`CancelPendingCamera()` 不会撤销已受理的远端仲裁或停止正在推的流。
 
-### 9.3 反初始化
+### 画面源所有权
 
-```csharp
-MVXRSDK.UnInitMVXRSDK();   // 幂等：未初始化时直接 return；这就是"离房"
-```
+`Streaming.TrySetSource(IStreamSource)` 返回 `Accepted / Busy / Invalid`。**只有 Accepted 转移源适配器的所有权**；被拒对象仍由调用者负责 Dispose。
 
-UnInit 是"反向 + 对称 + 幂等"的：卸载顺序与装配顺序相反、System reset 与 System Init 一一配对、无论当前是否初始化都可安全调用。
+提供 `CameraStreamSource`（独立相机直渲普通 RT）和 `RenderTextureStreamSource`（普通 Tex2D Blit）。底层相机/外部 RT 为借用对象，不因源适配器释放而被销毁。
 
-### 9.4 日志关闭
+推流活跃且已有不同源时返回 Busy，不抢占、不排队；同源重复提交幂等。空闲时可以替换。输出固定 16:9、偶数对齐，默认 1280×720；无源时推黑帧。清源不销毁编码器仍借用的输出 RT。
 
-业务方关闭 SDK 日志的**唯一**方式是编译宏：
+手动源默认跨正常停流保留；场景卸载前必须 `ClearSource()`，随后再销毁借用相机或 RT。相机 targetTexture 被业务重新接管后，SDK 不覆盖业务的新设置。
 
-> Player Settings → Scripting Define Symbols 添加 **`MVXRSDK_LOG_DISABLED`**，即零开销关闭 SDK 全部日志。
+### 音频与配置
 
-> ⚠️ SDK 内部日志类 `MVXRSDKLog` 是 **`internal`**，业务方**跨程序集调不到** `SetMinLevel` / `SetTag` 等 —— 运行时日志级别 API 属 SDK 内部，业务请勿尝试调用（旧文档教业务用 `MVXRSDKLog.SetMinLevel` 是错误的）。
+音频只有游戏音，不采麦克风。使用 `CaptureGameAudio(listener)` 取得可释放绑定句柄，或调用 `PushGameAudioPcm(pcm, sampleRate, channels)`。支持 8000–192000Hz、mono/stereo；stereo 折叠为 mono，连续重采样，有界缓冲写满丢最旧、读空补零。
 
----
+`MVXRStreamRig.Bind(client)` 显式绑定实例，应用 `StreamConfigAsset` 的完整媒体配置并采集指定 Listener；组件不拥有主相机或切镜编排。
 
-## 10. 常见问题 FAQ
+`ApplyConfiguration` 要求 Version 递增：采集节流和重试策略即时更新；协商参数下一媒体会话生效。更改输出尺寸前须无媒体会话且已清源；音频环形缓冲容量仅创建客户端时配置。
 
-- **Q：怎么入房 / 退房？找不到 `JoinRoom`？**
-  A：SDK **没有** `JoinRoom` / `LeaveRoom`，也没有 `OnConnected` / `OnDisconnected` 事件。入房是 Production / WsDirect 网络阶段自动完成的；退房即 `UnInitMVXRSDK`；连接态用 `MVXRSDK.IsConnected` / `MVXRSDK.State` 查询。
+关闭先阻止新音频写入和 native 使用，再等待在途回调归零。等待过久报告 `AudioDrainStalled`，仍保持 Stopping，不靠超时强行释放音轨。
 
-- **Q：初始化抛 `ArgumentException`？**
-  A：`deviceId` 入参严格校验（不可空 / 不可超长 / 不含非法字符），先确认取到的 SN 合法。
+### WHIP 与平台边界
 
-- **Q：节点注册时机不对会报错吗？**
-  A：不会。三类节点任何时机皆可注册（Init 前/中/后），未注册时对应功能静默不启用、不报错，注册后自动回放恢复。
+- 仅局域网，无 STUN/TURN；使用 non-trickle ICE。
+- HTTP 使用协程；POST 迟到的 Location 在有限清理预算内仍被接管。
+- 所有结束路径统一进行一次 best-effort DELETE；200/204/404 视为完成，失败或超预算有诊断，不承诺远端必达、不自动反复 DELETE。默认远端清理预算 2 秒；它不限制 native 安全释放等待。
+- 强制 H.264 默认开启；不支持时明确失败。码率下限不能高于上限；配置不能保证设备一定达到目标码率或帧率。
+- Vulkan 历史问题发生在读取 XR eye buffer/FDM 的采集层。本链使用独立普通 RT，不新增主相机、eye buffer 或屏幕抓帧路径。PICO/Vulkan 的最终结论必须来自真机回归。
 
-- **Q：怎么调 SDK 日志级别？为什么 `MVXRSDKLog.SetMinLevel` 编译不过？**
-  A：`MVXRSDKLog` 是 internal，业务方调不到。要关日志，加编译宏 `MVXRSDK_LOG_DISABLED`（见 §9.4）。
+## 8. Editor 工具与迁移
 
-- **Q：积分扣除验证总是失败？**
-  A：① 确认是 Production 模式（WsDirect / Offline 立即返回 false）；② 检查网络连通、账户积分、包名是否已提交后台；③ 订阅 `OnError` 看细致错误码。
+[Editor 工具指南](editor-tools-guide.md) 描述平台验证、规格和地块编辑入口。正式/测试/离线环境、资产字段与封签规范保留。
 
-- **Q：PICO 4U 推流画面错乱 / 黑屏？**
-  A：画面错乱是 v2 时代 Vulkan 下读 eye buffer 抓帧的坑（FDM 注视点渲染所致），v3 推流源为独立相机直渲普通 RT，无此问题，Vulkan 可用。黑屏先查画面源是否已接上 —— 无源推黑帧是设计行为。
+异步规格/上传/封签操作捕获固定环境、端点、凭据与资产修订；切环境不重定向在途请求，资产已变时拒绝覆盖。远端可能已经接受的写操作不自动回滚或重试。
 
-- **Q：推流音频没声 / 音调失真？**
-  A：业务采集回调直接传 `AudioSettings.outputSampleRate` 即可（SDK 工作采样率跟随设备输出率）；推流音频仅游戏音一路，无麦克风。仍无声时检查 AudioListener 是否已接入。
+`MVXRSDKSettingsAsset.requireSpatialDataForBuild` 默认 true：缺必要地块、封签无效或环境不一致会阻断构建。非正式环境默认警告；`failOnNonProductionBuild` 可设为错误。CI 与交互构建执行同一规则，不再通过“继续出包”绕过。
 
-- **Q：推流中调 `SetStreamSource` 不生效？**
-  A：一相机推流保护 —— 会话活跃且已有源时新源直接丢弃（Warning 日志，不排队不抢占）。先 `ClearStreamSource()` 再接，或等停流。
+封签是本地一致性措施，不是服务端授权签章。凭据不得进入业务日志、测试输出或报告。
 
-- **Q：注册多个根节点时偏移如何应用？**
-  A：所有已注册根节点同步应用相同的位置偏移与旋转。
+### 从3.x迁移
 
-- **Q：录屏怎么主动停止？**
-  A：本期无 `StopRecord` 接口，录屏是限时模式，到 `DurationSec` 由服务端自动停。
+1. 所有静态业务入口改成 `Create` 返回的客户端域服务；程序集引用同步更新。
+2. 移除场景根节点偏移方案；显式插入单位 CalibrationRoot，完整绑定四节点。
+3. `SpatialRigSetup.EnsureCalibrationRoot` 是可撤销的 Editor 装配辅助，不保存场景。检查层级后由开发者手动保存。
+4. 保留的PICO/宿主旧场景序列化引用保留，但**不会自动补齐新增四节点接线**；不要假设打开旧场景即可直接运行。
+5. SDK 默认 prefab 的脚本 GUID 保留；NetworkTransform/SpaceObstacles 已变为内部被动视图，不再挂到玩家相机作为 Reporter。
+6. `StreamConfigAsset.ToMediaOptions/ApplyTo` 替代旧 ToStreamConfig/Apply；手动源被拒时自行释放。
+7. 区分准入、扣费、导演受理、媒体连接、录制文件完成，不能沿用旧 bool 事件推断后续阶段。
+8. `ShowNetworkFailureHud` 默认 true；终态失败且已绑定 Head 时显示，换绑/结束/释放自动收敛。自定义业务 UI 可关闭它。
 
----
+## 9. 验证范围
 
-## 11. 版本与支持
+测试位于宿主 `Assets/Tests`，不随 SDK 分发。EditMode 验证算法、状态、所有权、协议映射和 Editor 用例；PlayMode 验证真实帧驱动、销毁和异步关闭。替身媒体测试不等于硬件编码通过。
 
-- **当前版本**：MyVerse XR SDK **3.1.5**（命名空间 `MyVerseXRSDK`）。
-- **更新记录**：见 [CHANGELOG.md](../CHANGELOG.md)（含 v1.x → v2.x 及推流 v3 切镜化重构的 Migration Guide）。
-- **API 细节**：见 [API 参考手册](api-reference.md)。
-- **技术支持**：`support@myverse.com`。
+实例日志通过创建配置`SdkOptions.Logging.Sink`注入，包含状态变化、告警和捕获异常；支持等级过滤、独立Unity输出开关、有界主线程延后派发及关闭排空。日志开关不改变业务错误结果或事件。`Diagnostics.DroppedLogCount`可观察sink积压丢弃；sink自身异常/递归与超限提示走Unity兜底。该出口不接管Editor、宿主或引擎原生日志，详细默认值与脱敏边界见API参考。
 
----
+发布前还须独立工程导入、真实中控/房间/WHIP/WSS 联调、Android 构建及 PICO 真机/Vulkan 回归。开发中的本地测试数字不能代替这些验收。
 
-## 12. Editor 工具：SDK 验证与本地区域地块编辑器
-
-> 逐步操作说明（含开发者平台凭据获取、失败原因对照、常见问题）见独立文档：[SDK 验证与地块编辑器操作说明](editor-tools-guide.md)。本节只保留概览。
-
-### 12.1 SDK 验证与环境
-
-Editor 工具链的远端能力（区域规格列表拉取、地块数据上传）需要 appId 与 AccessToken（在开发者平台生成的长期 API 令牌），并且**按环境走**：
-
-- **环境选择**（面板顶部下拉，默认正式环境）：正式 `http://developer-platform.myverse.fans`、测试 `http://172.0.0.218:3888`（地址内置只读，防连错环境）、离线（无服务器）。切换环境会同步写入地块数据资产的 `activeEnvironment`——运行时按它取对应环境的地块组。
-- **凭据按环境独立**：正式/测试平台账号体系独立，appId/AccessToken 与验证状态各存一份，切环境后需分别验证。
-- **离线环境**：无验证概念，远端功能不可用；地块编辑器变为仅本地保存（见 12.2）。
-
-1. 打开工程时若当前环境未验证会自动弹出验证面板（每个编辑器会话最多提示一次；离线环境不弹）；也可从菜单 MyVerse → XRSDK → SDK 验证打开。
-2. 选择环境，填写该环境的 appId 与 AccessToken，点"验证"。通过后保存在 `MVXRSDKSettingsAsset`（默认 `Assets/MVXRSDK/MVXRSDKSettings.asset`，随项目入 git，团队共享，验证一次全员生效）。
-3. 未验证时相关远端功能会被拦截并引导打开本面板。
-4. 面板下方的"重新封签"：当前环境地块组无有效封签时出现（旧版迁移数据/被手改），逐条重传全部成功后写回签名（见 12.3）。
-
-注意：AccessToken 在开发者平台重新生成后旧令牌立即失效（一个开发者同时仅一枚有效）；后续接口若报 `[10006] AccessToken 已失效`，请重新验证并更新令牌。appId 归属校验发生在上传地块时（`[10007]`）。
-旧版（单环境）设置与地块数据在编辑器打开后**自动迁入测试环境**（旧默认地址即测试环境）；正式环境需重新验证，迁移的地块需"重新封签"。
-
-### 12.2 本地区域地块编辑器
-
-用于制作"本地区域数据列表"资产；运行时区域对齐按远端下发长宽生成临时 id（tagId 形态 `宽x长` 小写，如 `6x12`）匹配本地条目（运行时链路随本版本系列接入，见 CHANGELOG）。
-
-使用步骤：
-1. 先完成当前环境的 SDK 验证（见 12.1）——创建条目与保存上传需要（离线环境除外）。
-2. Hierarchy 右键 → MyVerse → 生成本地区域地块编辑器（对象 tag=EditorOnly，不会进包）。
-3. Inspector 指定或"新建"配置文件——**必须位于任一 Resources 根下的 `MVXRSDK/LocalRegionData.asset`**（运行时固定路径加载，放错位置工具会给警告）。
-4. 点"创建新条目"从远端规格列表选 id（当前环境已有的 id 置灰）；SceneView 拖拽底框调整位置/旋转，或在面板直接输入数值。**列表/新建/保存/删除均作用于当前激活环境的组**（面板顶部有环境徽标）。
-5. 点"保存"：数据先上传远端（`POST /api/region/block`），成功后才写入本地资产**并自动封签**；失败会报错且不保存，可修改后重试。注意后端当前为追加插入，同一 id 重复保存会在服务端累积多条记录。
-6. 删除条目仅删本地，不同步远端（删除后组自动重签）。
-7. **离线环境**：新建条目手填 id（格式同远端 tagId：`宽x长` 小写），保存直接落盘（不上传、无封签）。
-
-### 12.3 地块数据防篡改封签
-
-- 正式/测试环境的地块组带 **HMAC 封签**：地块编辑器每次保存/删除后对该组重算签名写入资产。
-- 运行时加载激活环境组时**验签**：失败（含签名缺失）→ **整组拒用 + Error 日志**（区域对齐与地块显示均不生效）。这是刻意的 fail-loud——本地地块必须与平台上传数据一致。
-- 因此**请勿绕过地块编辑器手改 `LocalRegionData.asset`**（资产 Inspector 已只读化并提示）；需要改动一律走编辑器（保存自动过上传门禁，保持与平台一致）。
-- 签名失效的恢复：验证面板"重新封签"（逐条重传+写签名），或在编辑器中逐条重新保存。
-- 离线环境组无封签（本地直存语义，不参与一致性保证）。
-
-注意：区域对齐是**世界层级刚体变换**（A=区域为父、B=游戏偏移为子、C=地块与 A 同级）。游戏偏移 `gameOffset`（B 相对 A）会被区域旋转带动；地片 `position`（C 与 A 同级）是**世界层级直接相减、不被区域旋转带动**。地片 `rotation` **不参与根节点对齐**（只影响地块可视物显示朝向）；若希望根节点朝向随之改变，用远端 `gameOffsetRotation`。
-
----
-
-## 附录 · 非业务面 public 类型
-
-下列基础设施 / 协议栈类型**已收敛为 internal**，业务无法也无需引用：`SocketSystem`、`PoolSystem`、Socket / 内置 WebSocket 协议栈、`GameAudioStreamCapture` 等。仅 PB 生成产物（`Logic.cs` / `Ws.cs`）仍为 public（生成代码不手改），但同样不面向业务，**请勿在业务代码中使用**。
+完整签名与配置见 [API 参考](api-reference.md)。

@@ -5,8 +5,8 @@ namespace MyVerseXRSDK
 {
     /// <summary>
     /// 运行时本地区域地块可视物：自发光（Unlit，不受场景光照/烘焙影响）半透明贴地矩形。
-    /// 由 RegionTileModule 实例化为独立场景根对象（DontDestroyOnLoad，跨场景常驻）：尺寸取匹配地块长宽，
-    /// 位置/旋转取区域对齐计算结果（与场景根节点同一世界位姿，设世界坐标）。
+    /// 由所属客户端的RegionFloorPresenter创建在物理代理根下，R帧位姿和尺寸取服务端区域。
+    /// 本组件仅创建渲染资源，不写世界位姿或独立常驻。
     /// 尺寸走 localScale（单位 quad ×(宽,1,长)），随推送热更新无需重建 mesh。
     /// 自发光的意义：Unlit 不依赖 lightmap，第三方烘焙光工程里动态实例化也照常可见。
     /// 材质走包内预置 Resources 资产（<see cref="MaterialResourcesPath"/>）而非运行时 Shader.Find——
@@ -25,8 +25,12 @@ namespace MyVerseXRSDK
         private static Mesh s_UnitQuad;   // 单位 quad 静态共享
         private Material m_Material;       // 每实例一份，OnDestroy 清理
 
-        private void Awake()
+        private SdkLogger log;
+
+        internal void Initialize(SdkLogger log)
         {
+            if (this.log != null) return;
+            this.log = log;
             var mf = gameObject.AddComponent<MeshFilter>();
             mf.sharedMesh = GetUnitQuad();
 
@@ -38,24 +42,12 @@ namespace MyVerseXRSDK
 
             m_Material = LoadOrCreateMaterial(DefaultColor);
             if (m_Material != null) mr.sharedMaterial = m_Material;
-        }
-
-        /// <summary>
-        /// 按区域对齐计算结果更新可视物：position/eulerAngles 取自 <see cref="RegionAlignmentCalculator"/>
-        /// 的**世界位姿**（与场景根节点同一值），尺寸取自匹配地块长宽。
-        /// 设世界坐标 → 地块落到区域对齐后的物理位置（本对象为独立根对象，世界坐标即最终位姿）。
-        /// </summary>
-        public void Apply(Vector3 position, Vector3 eulerAngles, float width, float len)
-        {
-            transform.position    = position;
-            transform.eulerAngles = eulerAngles;
-            // 宽沿本地 X、长沿本地 Z（与编辑器底框、区域约定一致）
-            transform.localScale = new Vector3(Mathf.Abs(width), 1f, Mathf.Abs(len));
+            log.Write(SdkLogLevel.Info, "Space", "区域地面渲染资源已初始化");
         }
 
         private void OnDestroy()
         {
-            if (m_Material != null) Destroy(m_Material);
+            if (m_Material != null) SpatialContext.Destroy(m_Material);
         }
 
         // 单位 quad（1×1，XZ 平面，中心原点）；cull off 双面渲染，绕序/法线不影响 Unlit 观感
@@ -81,7 +73,7 @@ namespace MyVerseXRSDK
         // 材质来源：优先加载包内预置材质（强制 URP Unlit shader 进 build），实例化后按 color 覆盖颜色；
         // 实例化而非直接用资产 → OnDestroy 可安全销毁、不污染 Resources 资产本体。
         // 仅在预置材质缺失（被误删等）时才退化到运行时构造。
-        private static Material LoadOrCreateMaterial(Color color)
+        private Material LoadOrCreateMaterial(Color color)
         {
             var shipped = Resources.Load<Material>(MaterialResourcesPath);
             if (shipped != null)
@@ -91,14 +83,14 @@ namespace MyVerseXRSDK
                 mat.SetColor("_Color", color);   // 兼容部分 URP 版本的属性名
                 return mat;
             }
-            MVXRSDKLog.Warning($"RegionTileView: 未找到包内材质 Resources/{MaterialResourcesPath}，退化到运行时构造" +
+            log.Write(SdkLogLevel.Warning, "Space", $"RegionTileView: 未找到包内材质 Resources/{MaterialResourcesPath}，退化到运行时构造" +
                                "（build 里 URP Unlit 可能被剥离而不渲染）");
             return CreateEmissiveMaterial(color);
         }
 
         // 兜底：运行时构造自发光半透明材质。仅在包内预置材质缺失时走到；
         // 注意 Shader.Find 在 build 里若 shader 被剥离会返回 null，故正常路径应走上面的预置材质。
-        private static Material CreateEmissiveMaterial(Color color)
+        private Material CreateEmissiveMaterial(Color color)
         {
             var urp = Shader.Find("Universal Render Pipeline/Unlit");
             if (urp != null)
@@ -115,7 +107,7 @@ namespace MyVerseXRSDK
                 mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
                 mat.renderQueue = (int)RenderQueue.Transparent;
                 mat.SetOverrideTag("RenderType", "Transparent");
-                MVXRSDKLog.Info("RegionTileView: 使用 URP Unlit 材质（透明自发光）");
+                log.Write(SdkLogLevel.Info, "Space", "RegionTileView: 使用 URP Unlit 材质（透明自发光）");
                 return mat;
             }
 
@@ -125,11 +117,11 @@ namespace MyVerseXRSDK
             {
                 var mat = new Material(sprite) { color = color };
                 mat.renderQueue = (int)RenderQueue.Transparent;
-                MVXRSDKLog.Warning("RegionTileView: 未找到 URP Unlit，退化到 Sprites/Default（URP 下可能不渲染，请检查管线）");
+                log.Write(SdkLogLevel.Warning, "Space", "RegionTileView: 未找到 URP Unlit，退化到 Sprites/Default（URP 下可能不渲染，请检查管线）");
                 return mat;
             }
 
-            MVXRSDKLog.Warning("RegionTileView: 未找到可用 Unlit shader，地块可视物将不可见");
+            log.Write(SdkLogLevel.Warning, "Space", "RegionTileView: 未找到可用 Unlit shader，地块可视物将不可见");
             return null;
         }
     }

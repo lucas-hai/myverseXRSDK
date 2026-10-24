@@ -3,17 +3,8 @@ using UnityEngine;
 namespace MyVerseXRSDK.Streaming
 {
     /// <summary>
-    /// 推流音频采集 + 配置应用装配 MonoBehaviour（v3 切镜化重构后）。
-    ///
-    /// 本版本 Rig **不承载画面推流**：画面源管理由业务直接调 SDK 公共 API——
-    /// 推荐 MVXRSDK.SendDirectorRequest(opts, camera) 一步完成"请求 + 被选中自动接源 +
-    /// 停流自动清"；需要精细控制时手动订阅 OnPushStreamStarting 接源 /
-    /// OnPushStreamStopped 清源。多场景约定见 Documentation~ 的"多场景使用"一节。
-    ///
-    /// 职责：
-    /// - OnEnable 时应用 StreamConfigAsset（写入 StreamConfig.Active）
-    /// - 装配游戏音采集（AudioListener tap → PushGameAudioPcm）
-    /// 推流不含麦克风语音（SDK 不碰麦克风设备，不与语音 SDK 抢麦）。
+    /// 显式绑定客户端的音频/配置装配组件，不创建SDK实例、不承载画面推流，也不采麦克风。
+    /// 业务创建客户端后调用Bind；画面使用client.Director或client.Streaming的域接口。
     /// </summary>
     [AddComponentMenu("MyVerse XR SDK/Stream Rig")]
     [DisallowMultipleComponent]
@@ -24,25 +15,47 @@ namespace MyVerseXRSDK.Streaming
         public AudioListener gameAudioListener;
 
         [Header("推流配置 Asset")]
-        [Tooltip("推流视频编码参数 Asset（Fps / InternalRT 长边 / 码率 / H.264）。\n" +
-                 "创建方式：Project 右键 → Create → MyVerse XR SDK → Stream Config。\n" +
-                 "Rig OnEnable 时自动 Apply 写入 StreamConfig.Active。\n" +
-                 "留空时全部走 SDK 默认（Fps=30 / 长边 1280 / 码率 3500 / H.264 强制）。")]
+        [Tooltip("完整媒体配置。Bind(client)时应用；再次启用Rig不会覆盖客户端运行时配置。非默认音频缓冲容量须在创建客户端时通过ToMediaOptions配置。")]
         public StreamConfigAsset streamConfigAsset;
 
-        private GameAudioStreamCapture m_GameAudio;
+        private SdkClient client;
+        private AudioCaptureHandle m_GameAudio;
+
+        /// <summary>将本Rig绑定到明确客户端并应用完整配置；重复绑定同实例只刷新音频绑定，不覆盖运行时配置。</summary>
+        public SdkResult Bind(SdkClient owner)
+        {
+            if (owner == null || owner.State == SdkClientState.Stopping || owner.State == SdkClientState.Disposed || owner.State == SdkClientState.Faulted)
+                return SdkResult.Fail(SdkErrorCode.InvalidState, "Rig需要存活客户端");
+            if (!ReferenceEquals(client, owner) && streamConfigAsset != null)
+            {
+                var configured = streamConfigAsset.ApplyTo(owner.Streaming);
+                if (!configured.Success) return configured;
+            }
+            if (!ReferenceEquals(client, owner)) { m_GameAudio?.Dispose(); m_GameAudio = null; }
+            client = owner;
+            return RefreshCapture();
+        }
 
         private void OnEnable()
         {
-            if (streamConfigAsset != null)
-            {
-                streamConfigAsset.Apply();
-            }
+            if (client == null || client.State == SdkClientState.Stopping || client.State == SdkClientState.Disposed) return;
+            var result = RefreshCapture();
+            if (!result.Success) client.Log.Write(SdkLogLevel.Error, "Streaming", "Rig音频绑定失败：" + result.Message, result.Code);
+        }
 
-            if (gameAudioListener != null)
+        private SdkResult RefreshCapture()
+        {
+            if (!isActiveAndEnabled || gameAudioListener == null)
             {
-                m_GameAudio = new GameAudioStreamCapture(gameAudioListener);
+                m_GameAudio?.Dispose(); m_GameAudio = null;
+                return SdkResult.Ok;
             }
+            try
+            {
+                m_GameAudio = client.Streaming.CaptureGameAudio(gameAudioListener);
+                return SdkResult.Ok;
+            }
+            catch (System.Exception error) { return SdkResult.Fail(SdkErrorCode.InvalidState, error.Message); }
         }
 
         private void OnDisable()

@@ -1,6 +1,6 @@
 {
   "name": "com.myverse.xrsdk",
-  "version": "3.3.1",
+  "version": "4.0.0-preview.1",
   "displayName": "MyVerse XR SDK",
   "description": "MyVerse 多人 XR 协作 SDK：房间同步、空间对齐、WebRTC 推流、导播切换",
   "unity": "2022.3",
@@ -23,9 +23,9 @@
   },
   "samples": [
     {
-      "displayName": "Demo",
-      "description": "SDK 全模块联合示例：节点注册 / 启动模式 / 推流 / 切镜 / 录屏 / 积分。含 MVXRSDKDemo.unity 场景 + MVXRSDKDemo.cs 总控脚本",
-      "path": "Samples~/Demo"
+      "displayName": "Editor Integration Demos",
+      "description": "纯Editor分场景接入：Inspector配置、组件菜单操作；连接、空间与设备、业务、直推/中控推流和跨场景，不依赖PICO或XR输入",
+      "path": "Samples~/EditorDemos"
     }
   ]
 }

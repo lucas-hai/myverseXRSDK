@@ -3,15 +3,8 @@ using UnityEngine;
 namespace MyVerseXRSDK
 {
     /// <summary>
-    /// 推流"视频编码参数"的 Unity Asset 入口（ScriptableObject）。
-    ///
-    /// 范围：仅暴露使用者通常需要调整的视频编码参数（帧率 / 码率 / 编码格式）。
-    /// 握手超时、重试节奏、自愈窗口、Stats 间隔等推流业务逻辑参数**不在此 Asset**，
-    /// 走 SDK 内置默认；若确需调走 <see cref="MVXRSDK.SetStreamConfig"/> 代码入口。
-    ///
-    /// 用法：Project 右键 → Create → MyVerse XR SDK → Stream Config 生成 Asset，
-    /// 拖到 <see cref="Streaming.MVXRStreamRig"/> 的 streamConfigAsset 字段，
-    /// Rig OnEnable 时自动 <see cref="Apply"/> 写入生效配置。
+    /// 完整媒体配置资产，保留视频字段的序列化身份。
+    /// 实例路径通过ToMediaOptions或ApplyTo应用完整快照，网络策略也明确包含在资产中。
     /// </summary>
     [CreateAssetMenu(menuName = "MyVerse XR SDK/Stream Config", fileName = "StreamConfig")]
     public sealed class StreamConfigAsset : ScriptableObject
@@ -22,8 +15,8 @@ namespace MyVerseXRSDK
                  "• 相机源（CameraStreamSource）按 RT 尺寸渲染，比例永远正确\n" +
                  "• RT 源（RenderTextureStreamSource）Blit 缩放适配，非 16:9 外部 RT 会拉伸\n" +
                  "• 越大画质越好但码率/CPU 占用越高；越小越省但接收端画面糊\n" +
-                 "• InternalRT 创建后常驻，运行中改不重建——需 UnInit → Init 才生效")]
-        [Min(16)]
+                 "• 变更尺寸前需停止会话并ClearSource，再整体应用新配置")]
+        [Min(146)]
         public int StreamMaxLongSide = 1280;
 
         [Tooltip("推流帧率上限（fps）。\n" +
@@ -56,30 +49,44 @@ namespace MyVerseXRSDK
                  "• com.unity.webrtc 未编译 H.264 时设 true 会握手期报 CodecNegotiationFailed")]
         public bool ForceH264 = true;
 
-        // ============================== 转换 / 应用 ==============================
+        [Header("配置版本与网络策略")]
+        [Min(1)] public int ConfigurationVersion = 1;
+        [Min(1)] public int IceGatheringTimeoutSeconds = 3;
+        [Min(1)] public int HttpTimeoutSeconds = 30;
+        [Min(0.1f)] public float HandshakeTimeoutSeconds = 150;
+        [Min(0.1f)] public float DisconnectedGraceSeconds = 5;
+        [Min(0.1f)] public float StatisticsIntervalSeconds = 1;
+        [Min(0.1f)] public float RemoteCleanupSeconds = 2;
+        [Min(0.1f)] public float AudioDrainWarningSeconds = 5;
+        [Min(1)] public int AudioBufferSamples = 32768;
+        public int[] RetryDelaysMilliseconds = { 2000, 5000, 10000 };
 
-        /// <summary>
-        /// 把 Asset 的视频编码字段叠加到一份新的 <see cref="StreamConfig"/>。
-        /// 握手/重试/容错/Stats 等未暴露字段保留 <see cref="StreamConfig"/> 默认值（SDK 内置策略）。
-        /// </summary>
-        public StreamConfig ToStreamConfig()
+        /// <summary>捕获完整媒体配置，不引用可变资产数组；供创建SdkOptions.Media时使用。</summary>
+        public MediaOptions ToMediaOptions()
         {
-            // 起点 = StreamConfig 默认实例（持有 SDK 内置握手/容错/Stats 策略）
-            // 仅覆盖 Asset 暴露的视频编码 4 项
-            return new StreamConfig
+            return new MediaOptions
             {
-                Fps = Fps,
-                StreamMaxLongSide = StreamMaxLongSide,
-                VideoBandwidthKbps = VideoBandwidthKbps,
-                VideoMinBitrateKbps = VideoMinBitrateKbps,
-                ForceH264 = ForceH264,
-            };
+                Version = ConfigurationVersion, FramesPerSecond = Fps, OutputLongSide = StreamMaxLongSide,
+                VideoBandwidthKbps = VideoBandwidthKbps, VideoMinBitrateKbps = VideoMinBitrateKbps, ForceH264 = ForceH264,
+                IceGatheringTimeoutSeconds = IceGatheringTimeoutSeconds, HttpTimeoutSeconds = HttpTimeoutSeconds,
+                HandshakeTimeoutSeconds = HandshakeTimeoutSeconds, DisconnectedGraceSeconds = DisconnectedGraceSeconds,
+                StatisticsIntervalSeconds = StatisticsIntervalSeconds, RemoteCleanupSeconds = RemoteCleanupSeconds,
+                AudioDrainWarningSeconds = AudioDrainWarningSeconds, AudioBufferSamples = AudioBufferSamples,
+                RetryDelaysMilliseconds = RetryDelaysMilliseconds
+            }.Capture();
         }
 
-        /// <summary>把 Asset 配置写入 SDK 全局生效配置（等价 <see cref="MVXRSDK.SetStreamConfig"/>）。</summary>
-        public void Apply()
+        /// <summary>显式将完整资产配置应用到指定客户端，分配更高运行版本；尺寸/音频容量仍受服务的生命周期约束。</summary>
+        public SdkResult ApplyTo(StreamingService streaming)
         {
-            MVXRSDK.SetStreamConfig(ToStreamConfig());
+            if (streaming == null) return SdkResult.Fail(SdkErrorCode.InvalidArgument, "推流服务不能为空");
+            MediaOptions options;
+            try { options = ToMediaOptions(); }
+            catch (System.ArgumentException error) { return SdkResult.Fail(SdkErrorCode.InvalidArgument, error.Message); }
+            int current = streaming.GetConfiguration().Version;
+            if (current == int.MaxValue) return SdkResult.Fail(SdkErrorCode.InvalidState, "配置版本已耗尽，请创建新客户端");
+            options.Version = System.Math.Max(options.Version, current + 1);
+            return streaming.ApplyConfiguration(options);
         }
     }
 }

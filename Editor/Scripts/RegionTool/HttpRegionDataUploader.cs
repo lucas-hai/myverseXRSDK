@@ -29,13 +29,16 @@ namespace MyVerseXRSDK.Editor
             public Vec3 rotation;
         }
 
-        public void Upload(LocalRegionData data, Action onDone, Action<string> onError)
+        public void Upload(EditorApiContext context, LocalRegionData data, Action onDone, Action<string> onError)
         {
-            if (!SdkAuthStore.TryGetApiContext(out var serverUrl, out var appId, out var accessToken, out var contextError))
+            if (context == null || !context.IsRemote || data == null)
             {
-                onError?.Invoke(contextError);
+                onError?.Invoke("上传需要有效的远端API上下文和地块数据");
                 return;
             }
+            var serverUrl = context.ServerUrl;
+            var appId = context.AppId;
+            var accessToken = context.AccessToken;
             var body = JsonUtility.ToJson(new BlockRequest
             {
                 appId = appId,

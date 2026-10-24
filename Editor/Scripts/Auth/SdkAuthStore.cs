@@ -64,43 +64,23 @@ namespace MyVerseXRSDK.Editor
             }
         }
 
-        /// <summary>
-        /// 取远端接口调用上下文（当前激活环境的服务地址/appId/AccessToken）。
-        /// 离线环境、未验证或凭据缺失返回 false 并给出原因，供规格拉取/上传等受保护接口在发请求前统一拦截。
-        /// </summary>
-        public static bool TryGetApiContext(out string serverUrl, out string appId, out string accessToken, out string error)
+        /// <summary>为明确指定的环境捕获远端调用上下文；后续子请求必须复用返回的同一快照。</summary>
+        public static bool TryGetApiContext(SdkEnvironment environment, out EditorApiContext context, out string error)
         {
-            serverUrl = null;
-            appId = null;
-            accessToken = null;
-            var settings = FindSettings();
-            if (settings == null)
+            context = null;
+            if (environment == SdkEnvironment.Offline)
             {
-                error = "尚未完成 SDK 验证，请先通过菜单 MyVerse/XRSDK/SDK 验证";
+                error = "当前为离线环境，远端接口不可用";
                 return false;
             }
-            var env = settings.activeEnvironment;
-            if (env == SdkEnvironment.Offline)
+            try
             {
-                error = "当前为离线环境，远端接口不可用（可在验证面板切换到正式/测试环境）";
-                return false;
+                context = EditorApiContext.Capture(FindSettings(), environment);
+                error = null;
+                return true;
             }
-            var cred = settings.GetCredential(env);
-            if (cred == null || !cred.verified)
-            {
-                error = $"当前环境（{EnvDisplayName(env)}）尚未完成 SDK 验证，请先通过菜单 MyVerse/XRSDK/SDK 验证";
-                return false;
-            }
-            if (string.IsNullOrWhiteSpace(cred.appId) || string.IsNullOrWhiteSpace(cred.accessToken))
-            {
-                error = $"当前环境（{EnvDisplayName(env)}）的 appId 或 AccessToken 为空，请重新验证";
-                return false;
-            }
-            serverUrl = settings.GetServerUrl(env);
-            appId = cred.appId.Trim();
-            accessToken = cred.accessToken.Trim();
-            error = null;
-            return true;
+            catch (System.InvalidOperationException failure) { error = failure.Message; return false; }
+            catch (System.ArgumentException failure) { error = failure.Message; return false; }
         }
 
         /// <summary>环境显示名（面板/提示统一用词）。</summary>

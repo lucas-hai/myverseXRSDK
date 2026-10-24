@@ -7,8 +7,7 @@ namespace MyVerseXRSDK
     /// Camera 画面源：让 Camera 直接渲染到推流 RT，零额外 GPU Blit。
     /// 推荐用法——业务侧专门挂一台"直播相机"，SDK 接管 targetTexture。
     ///
-    /// 性能：Camera.targetTexture = RT 后，Camera 渲染管线直接输出到该 RT，
-    /// 无 Graphics.Blit 中间步骤。72/90Hz 渲染下 GPU 开销 ≈ 0。
+    /// Camera直接渲染到目标RT，不增加中间Blit；相机渲染本身仍消耗GPU。
     ///
     /// 业务约定：直播相机平时可以 enabled=false（不上屏、不烧 GPU）；
     /// Attach 时 SDK 自动强制启用，Detach 时还原回 Attach 前的值——
@@ -29,6 +28,10 @@ namespace MyVerseXRSDK
         public int Width => m_AttachedTarget != null ? m_AttachedTarget.width : 0;
         public int Height => m_AttachedTarget != null ? m_AttachedTarget.height : 0;
         public string DisplayName => m_Camera != null ? $"Camera({m_Camera.name})" : "Camera(disposed)";
+        public bool IsAvailable => m_Camera != null && (!m_Attached || m_Camera.targetTexture == m_AttachedTarget);
+        public void Tick(double now, int framesPerSecond) { }
+
+        internal SdkLogger Log { private get; set; }
 
         public event Action OnAttached;
         public event Action OnDetached;
@@ -46,14 +49,11 @@ namespace MyVerseXRSDK
         {
             if (m_Attached)
             {
-                MVXRSDKLog.Warning($"CameraStreamSource: 重复 Attach 被忽略 {DisplayName}");
-                return;
+                if (m_AttachedTarget == targetRT) return;
+                throw new InvalidOperationException("画面源已绑定另一个输出，必须先解绑");
             }
             if (m_Camera == null || targetRT == null)
-            {
-                MVXRSDKLog.Error("CameraStreamSource.Attach: camera 或 targetRT 为 null");
-                return;
-            }
+                throw new ArgumentException("相机与目标纹理必须有效");
             m_OriginalTarget = m_Camera.targetTexture;
             m_OriginalEnabled = m_Camera.enabled;
             m_AttachedTarget = targetRT;
@@ -62,26 +62,17 @@ namespace MyVerseXRSDK
             m_Camera.enabled = true;
             m_Attached = true;
 
-            // 相机销毁自保护（设计 §4.3）：业务忘了在场景卸载前 ClearStreamSource 时兜底
-            MonoSystem.AddLateUpdateListener(SelfProtectTick);
-
             try { OnAttached?.Invoke(); }
-            catch (Exception ex) { MVXRSDKLog.Error($"CameraStreamSource: OnAttached 回调异常 {ex}"); }
+            catch (Exception ex) { LogCallbackException(ex); }
         }
 
         public void Detach()
         {
             if (!m_Attached) return;
-            MonoSystem.RemoveLateUpdateListener(SelfProtectTick);
-            // 只在 targetTexture 仍是我们设置的那张 RT 时还原；
-            // 业务侧若中途自己改了 targetTexture，不覆盖业务的赋值
+            // 业务重设targetTexture视为收回控制权；此时也不能覆盖其enabled设置。
             if (m_Camera != null && m_Camera.targetTexture == m_AttachedTarget)
             {
                 m_Camera.targetTexture = m_OriginalTarget;
-            }
-            // 还原 enabled 到 Attach 前快照——默认 disabled 的相机切回后继续不渲染
-            if (m_Camera != null)
-            {
                 m_Camera.enabled = m_OriginalEnabled;
             }
             m_OriginalTarget = null;
@@ -89,17 +80,13 @@ namespace MyVerseXRSDK
             m_Attached = false;
 
             try { OnDetached?.Invoke(); }
-            catch (Exception ex) { MVXRSDKLog.Error($"CameraStreamSource: OnDetached 回调异常 {ex}"); }
+            catch (Exception ex) { LogCallbackException(ex); }
         }
 
-        /// <summary>
-        /// attach 期间每帧检查相机是否已被销毁（典型：场景卸载前业务未 ClearStreamSource）。
-        /// 销毁后自动让 TextureProviderSystem 清源推黑帧；Detach 时本 tick 随之摘除。
-        /// </summary>
-        private void SelfProtectTick()
+        private void LogCallbackException(Exception error)
         {
-            if (m_Camera != null) return;   // Unity null：未销毁则啥都不做
-            TextureProviderSystem.HandleSourceCameraDestroyed(this);
+            if (Log != null) Log.Exception("Streaming", error);
+            else MVXRSDKLog.Error(LogSanitizer.Clean(error.ToString()));
         }
 
         public void Dispose()

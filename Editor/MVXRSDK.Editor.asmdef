@@ -2,7 +2,7 @@
     "name": "MVXRSDK.Editor",
     "rootNamespace": "MyVerseXRSDK.Editor",
     "references": [
-        "MVXRSDK"
+        "MVXRSDK.Runtime"
     ],
     "includePlatforms": [
         "Editor"

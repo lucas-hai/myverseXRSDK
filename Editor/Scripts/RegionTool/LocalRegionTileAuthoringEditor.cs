@@ -21,6 +21,8 @@ namespace MyVerseXRSDK.Editor
         private string m_Search = "";
         private bool m_FetchingSpecs;                                          // 规格列表拉取在途（按钮置灰防重入）
         private System.Collections.Generic.List<RegionSpec> m_PendingSpecs;    // 异步拉回、待在 OnGUI 内弹出的规格
+        private SdkEnvironment m_SpecEnvironment;
+        private EditorAssetRevision m_SpecSettingsRevision;
         private bool m_Uploading;                                              // 地块上传在途（冻结全部交互）
         private Vector2 m_EntryListScroll;
         private Rect m_CreateButtonRect;                                       // "创建新条目"按钮 rect（规格弹窗锚点）
@@ -198,100 +200,47 @@ namespace MyVerseXRSDK.Editor
 
         private void SaveWorkingCopy()
         {
-            var env = m_EnvThisFrame;
-            var snapshot = Target.workingCopy.Clone(); // 上传与落盘用同一份快照，防止回调期间被继续编辑
-            // 捕获写入上下文：上传期间 UI 已冻结，但 Inspector 可能被关闭/切换选中对象，
-            // 回调不能再依赖 Target 的编辑态
-            var dataList = Target.dataList;
-            bool isNewEntry = Target.isNewEntry;
-            int editingIndex = Target.editingIndex;
-
-            if (env == SdkEnvironment.Offline)
+            var owner = Target;
+            var env = owner.editingEnv;
+            if (env != m_EnvThisFrame)
             {
-                SaveOffline(dataList, snapshot, isNewEntry, editingIndex);
+                EditorUtility.DisplayDialog("无法保存", "请先切回编辑条目所属环境。", "确定");
                 return;
             }
-
+            EditorApiContext context;
+            if (env == SdkEnvironment.Offline) context = EditorApiContext.Capture(null, env);
+            else if (!SdkAuthStore.TryGetApiContext(env, out context, out var contextError))
+            {
+                EditorUtility.DisplayDialog("无法保存", contextError, "确定");
+                return;
+            }
+            var ownerRevision = new EditorAssetRevision(owner);
+            string savedId = owner.workingCopy.id;
             m_Uploading = true;
             Repaint();
-            RegionToolServices.Uploader.Upload(snapshot,
-                onDone: () =>
+            var editing = new RegionEditingService(RegionToolServices.Uploader);
+            editing.Save(context, owner.dataList, owner.workingCopy, owner.isNewEntry, owner.editingIndex, (saved, error) =>
+            {
+                if (saved && ownerRevision.Matches())
                 {
-                    // 门禁兑现：上传已成功，即使 Inspector 已关闭也要落盘（用捕获的写入目标）
-                    bool saved = WriteEntry(dataList, env, snapshot, isNewEntry, editingIndex);
-                    if (!saved)
-                    {
-                        Debug.LogWarning($"[MVXRSDK] 地块 {snapshot.id} 已上传成功，但本地写入目标已失效（配置文件被删/条目下标失效），未落盘");
-                    }
-
-                    if (this != null)   // Inspector 仍存活：结束编辑态并解冻
-                    {
-                        m_Uploading = false;
-                        Undo.RecordObject(Target, "结束编辑地块");
-                        EndEditingState();
-                    }
-                    if (saved)
-                        EditorUtility.DisplayDialog("保存成功", $"地块 {snapshot.id} 已上传远端并保存到本地（已封签）。", "确定");
-                },
-                onError: error =>
+                    Undo.RecordObject(owner, "结束编辑地块");
+                    owner.isEditing = false;
+                    owner.isNewEntry = false;
+                    owner.editingIndex = -1;
+                    owner.hasUnsavedChanges = false;
+                    SceneView.RepaintAll();
+                }
+                if (this != null)
                 {
-                    if (this != null)
-                    {
-                        m_Uploading = false;
-                        Repaint();
-                    }
-                    EditorUtility.DisplayDialog("上传失败",
-                        $"{error}\n\n数据未保存，可修改后重试。", "确定");
-                });
-        }
-
-        // 离线保存：无上传门禁。新建需手填 id（非空 + 组内唯一）；组签名恒空（离线无封签语义）
-        private void SaveOffline(LocalRegionDataList dataList, LocalRegionData snapshot, bool isNewEntry, int editingIndex)
-        {
-            snapshot.id = snapshot.id?.Trim();
-            if (string.IsNullOrEmpty(snapshot.id))
-            {
-                EditorUtility.DisplayDialog("无法保存", "离线环境新建条目需填写 id（宽x长小写，如 6x12）。", "确定");
-                return;
-            }
-            if (isNewEntry && dataList.ContainsId(SdkEnvironment.Offline, snapshot.id))
-            {
-                EditorUtility.DisplayDialog("无法保存", $"离线环境已存在 id 为 {snapshot.id} 的条目。", "确定");
-                return;
-            }
-            bool saved = WriteEntry(dataList, SdkEnvironment.Offline, snapshot, isNewEntry, editingIndex);
-            if (saved)
-            {
-                EndEditingState();
-                EditorUtility.DisplayDialog("已本地保存", $"地块 {snapshot.id} 已保存到本地（离线环境，未上传、无封签）。", "确定");
-            }
-        }
-
-        // 写入当前环境组并维护封签（RegionDataSeal.Reseal 统一封签规则：离线恒空、其余重算）
-        private static bool WriteEntry(LocalRegionDataList dataList, SdkEnvironment env,
-                                       LocalRegionData snapshot, bool isNewEntry, int editingIndex)
-        {
-            if (dataList == null) return false;
-            Undo.RecordObject(dataList, "保存地块条目");
-            var set = dataList.GetOrCreateSet(env);
-            bool saved = false;
-            if (isNewEntry)
-            {
-                set.entries.Add(snapshot);
-                saved = true;
-            }
-            else if (editingIndex >= 0 && editingIndex < set.entries.Count)
-            {
-                set.entries[editingIndex] = snapshot;
-                saved = true;
-            }
-            if (saved)
-            {
-                RegionDataSeal.Reseal(set);
-                EditorUtility.SetDirty(dataList);
-                AssetDatabase.SaveAssets();
-            }
-            return saved;
+                    m_Uploading = false;
+                    Repaint();
+                    string message = saved
+                        ? $"地块 {savedId} 已保存到本地（{SdkAuthStore.EnvDisplayName(env)}）。"
+                        : error;
+                    EditorUtility.DisplayDialog(saved ? "保存成功" : "保存未完成", message, "确定");
+                }
+                else if (!saved) Debug.LogWarning("[MVXRSDK] 地块保存未完成：" + error);
+            });
         }
 
         // 编辑态统一出口（保存成功/取消/删除当前条目/防御失效都走这里，字段清理只维护一份）
@@ -471,12 +420,26 @@ namespace MyVerseXRSDK.Editor
                     SdkAuthWindow.Open();
                 return;
             }
+            if (!SdkAuthStore.TryGetApiContext(m_EnvThisFrame, out var context, out var contextError))
+            {
+                EditorUtility.DisplayDialog("无法拉取规格", contextError, "确定");
+                return;
+            }
+            m_SpecEnvironment = context.Environment;
+            m_SpecSettingsRevision = new EditorAssetRevision(SdkAuthStore.FindSettings());
+            var settingsRevision = m_SpecSettingsRevision;
             m_FetchingSpecs = true;
-            RegionToolServices.SpecSource.Fetch(
+            RegionToolServices.SpecSource.Fetch(context,
                 specs =>
                 {
                     if (this == null) return;   // Inspector 已关闭/切换选中对象（Unity 假 null）
                     m_FetchingSpecs = false;
+                    if (!settingsRevision.Matches())
+                    {
+                        Debug.LogWarning("[MVXRSDK] 环境或凭据已变化，旧规格结果已作废，请重新查询");
+                        Repaint();
+                        return;
+                    }
                     // 空列表不弹菜单（置灰菜单项易被忽略），改用明确的提示弹窗
                     if (specs == null || specs.Count == 0)
                     {
@@ -503,7 +466,9 @@ namespace MyVerseXRSDK.Editor
         // 规格选择弹窗：AdvancedDropdown（自带搜索/滚动/键盘导航），规格上百条时 GenericMenu 无法定位目标
         private void ShowSpecDropdown(System.Collections.Generic.List<RegionSpec> specs)
         {
-            var env = m_EnvThisFrame;
+            if (m_SpecSettingsRevision == null || !m_SpecSettingsRevision.Matches() || m_EnvThisFrame != m_SpecEnvironment) return;
+            var env = m_SpecEnvironment;
+            var settingsRevision = m_SpecSettingsRevision;
             var dropdown = new RegionSpecDropdown(specs,
                 // 当前环境已持久化条目 + 当前未保存的新建工作副本 都算"已存在"→ 置灰
                 isTaken: id => Target.dataList.ContainsId(env, id) ||
@@ -511,8 +476,12 @@ namespace MyVerseXRSDK.Editor
                 onSelect: spec =>
                 {
                     if (this == null) return;   // 选择回调异步于 Inspector 生命周期（Unity 假 null）
-                    // 弹窗打开期间可能切了环境：刷新帧内环境再进创建（editingEnv 要记真实环境）
-                    m_EnvThisFrame = SdkAuthStore.ActiveEnvironment;
+                    if (!settingsRevision.Matches() || SdkAuthStore.ActiveEnvironment != env || Target.dataList == null || Target.dataList.ContainsId(env, spec.id))
+                    {
+                        Debug.LogWarning("[MVXRSDK] 规格选择上下文已变化，请重新查询后选择");
+                        return;
+                    }
+                    m_EnvThisFrame = env;
                     BeginCreate(spec);
                 });
             dropdown.Show(m_CreateButtonRect);

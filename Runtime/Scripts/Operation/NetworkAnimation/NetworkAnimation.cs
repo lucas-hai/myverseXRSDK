@@ -5,7 +5,7 @@ using UnityEngine;
 namespace MyVerseXRSDK
 {
     [RequireComponent(typeof(Animation))]
-    public class NetworkAnimation : MonoBehaviour
+    internal sealed class NetworkAnimation : MonoBehaviour
     {
         private Animation anim;
 
@@ -14,8 +14,11 @@ namespace MyVerseXRSDK
         [SerializeField]
         private AnimationClip idleClip;
 
-        void Awake()
+        internal void Initialize()
         {
+            if (anim != null) return;
+            if (moveClip == null || idleClip == null)
+                throw new System.InvalidOperationException("角色表现资源缺少移动或静止动画");
             anim = GetComponent<Animation>();
             if (anim == null)
             {
@@ -29,17 +32,12 @@ namespace MyVerseXRSDK
             anim.AddClip(moveClip, moveClip.name);
         }
 
-        void Start()
-        {
-            anim.Play(idleClip.name);
-        }
-
-        public void PlayMoveClip()
+        internal void PlayMoveClip()
         {
             anim.Play(moveClip.name);
         }
 
-        public void PlayIdleClip()
+        internal void PlayIdleClip()
         {
             anim.Play(idleClip.name);
         }

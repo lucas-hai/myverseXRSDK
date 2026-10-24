@@ -3,12 +3,10 @@ using System;
 namespace MyVerseXRSDK.Editor
 {
     /// <summary>
-    /// 地块数据上传抽象：上传成功是本地落盘的前置条件（保存门禁）。
-    /// Http 实现待远端接口定义后补（HttpRegionDataUploader 占位，请求携带 SdkAuthStore 凭据），
-    /// 切换点在 <see cref="RegionToolServices.Uploader"/>。删除条目暂不同步远端（需求未提）。
+    /// 地块上传端口；一次操作的所有上传必须使用同一捕获上下文。成功只表示远端接受，不直接写本地资产。
     /// </summary>
     public interface IRegionDataUploader
     {
-        void Upload(LocalRegionData data, Action onDone, Action<string> onError);
+        void Upload(EditorApiContext context, LocalRegionData data, Action onDone, Action<string> onError);
     }
 }

@@ -6,6 +6,48 @@
 
 ---
 
+## [4.0.0-preview.1] - 待发布（候选整理：2026-10-23）
+
+### 破坏性变更
+- 入口改为 `MVXRSDK.Create(SdkOptions) → SdkClient` 及所属域服务；删除旧静态业务 API、自动 Bootstrap、Manager/Module 和全局调度/事件/网络/媒体链，不保留兼容门面。
+- 程序集改为 `MVXRSDK.Contracts / MVXRSDK.Runtime / MVXRSDK.Editor`，分场景示例为`MVXRSDK.EditorDemos / MVXRSDK.EditorDemos.Editor`；旧名称引用须迁移。
+- 地图不再被 SDK 移动。显式绑定 MotionRoot、独占 CalibrationRoot、TrackingRoot、Head；保留原 G→R 公式，将其完整逆 C 写入 CalibrationRoot.localPose。默认 HorizontalYaw，可选 Rigid3D，禁止缩放。
+- 本机采样、障碍物、虚影和区域地面统一使用 R 坐标；区域地面取 Region 自身位姿/尺寸，不再是独立常驻的地图根表现。
+- 准入通知不自动扣费；账务/导演/录制返回有 RequestId/TargetId 的操作结果。取消不撤销远端动作，未知远端结果明确标记；非幂等命令不自动重试。
+- 接源返回 Accepted/Busy/Invalid；仅 Accepted 转移源所有权。拒绝对象由调用者释放，手动源跨正常停流保留；自动源按控制会话释放。
+- 媒体配置整体版本化；StreamConfigAsset 提供 ToMediaOptions/ApplyTo，删除全局 Apply/ToStreamConfig。MVXRStreamRig 必须 Bind(client)。
+- 构建检查对 CI 与交互采用同一策略，必需地块缺失/封签无效/环境不一致会阻断；不再允许交互绕过或 CI 静默放行。
+
+### 新增与修复
+- 新增菜单的客户端创建入口拒绝编辑态误触，避免没有Update调度时留下Stopping实例；公开接入方法和02保持不变。
+- 除04外的接入示例统一Inspector配置、Play自动连接正式/测试中控，移除许可复选框、离线空间数据和重复交互面板；业务命令仍显式触发，04手动直推，07等待中控开停。保留普通RT预览、游戏音和源寿命示例；02脚本/场景/GUID不变。
+- 接入文档主入口改为EditorDemos七场景；删除旧联合Demo及专用程序集，只保留七个EditorDemos场景。其释放再创建、External专属输入、完整Rig解绑三项回归迁到公开API测试，测试程序集解除旧Sample依赖。
+- 补充正式发现→设备分配轮询→WS登录流程、API按任务索引、同房/跨房虚影与物理防撞提示的失效边界；不把本地测试或用户中控连接验收扩展为媒体/真机验收。
+- 正式Directory入口固定为原SDK的`http://localhost:8868/v1/vr/service/config`，移除DirectoryUrl配置及示例目录地址输入；仅测试ControlServer需要填写中控地址。
+- 计费遵守一次有效初始化一次成功扣费：`Billing.VerifyAccess(completed)`不再接收BillingRequest，删除AccessScope/UseCachedApproval；同客户端成功后统一返回缓存，重连/退房/换场景不重扣，新客户端开启新周期。
+- 空间与中控推流示例补齐正式Directory/测试ControlServer选择；空间示例保持Inspector自动启动、无运行时UI及无离线注入。畸形设备分配响应先报告错误，不误当房间解散；有效空字符串仍断开WS并继续HTTP轮询。
+- 新增`Space.TryWorldToRoom`，与Room→World使用同一有效参考帧，包含当前业务移动；双向拒绝非法Pose并在失败时清空输出。
+- 新增`SdkOptions.Logging`实例日志策略及只读`SdkLogEntry`：等级/Unity输出开关、自定义sink、有界主线程延后派发、关闭排空、异常隔离及凭据字段脱敏；不改变错误结果或Diagnostics.Error。
+- Runtime各域、网络/媒体适配、地面视图、绑定Rig及接管期内置源统一接入实例日志；地面视图改显式初始化，避免Awake早于依赖注入。独立源与Editor/宿主日志不误归属活动客户端。
+- Runtime、会话、传输、绑定和媒体代次隔离；配置捕获、主线程派发、至多一次命令完成与可取消操作句柄。
+- External专属写入租约、各域revision验证；同房显隐立即重评缓存，静止远端也能随Self接近出现；节点晚绑定、热替换和销毁防护。
+- WHIP迟到Location接管、有限清理预算与一次best-effort DELETE，明确报告失败；200/204/404视为清理完成。此策略不保证远端必达。
+- PCM ring并发保护、连续重采样、8k–192k校验；音频/native在途使用屏障，安全释放前保持Stopping，不用远端超时强行释放音轨。
+- Editor请求固定环境/凭据上下文与资产修订检查；保存/重新封签不覆盖期间发生的新修改。
+- 默认故障HUD成为实例观察者，可由ShowNetworkFailureHud关闭；随绑定/会话/客户端释放收敛。
+- 默认prefab的NetworkTransform、SpaceObstacles、NetworkAnimation保留脚本GUID，收敛为内部被动表现组件；不在玩家相机安装Reporter。
+
+- 增加网络/设备/障碍物可配置资源上限；组帧和排队阶段有界，压缩膨胀与待应答容量同样受限，超限明确诊断。
+- 修复诊断/启动/空间回调关闭重入、源调用在途的输出释放顺序、账务畸形code悬挂及构造失败资源回滚。
+- WebSocket改为显式拥有TCP/TLS升级流和单一收件队列、持久发送worker；Connecting可终止实际IO，不再遗留迟到握手连接。
+
+### 迁移与验证边界
+- PB生成文件和既有后端字段语义未修改；地块资产/封签规范保留。默认prefab与用户场景未自动重写或保存。
+- Demo/PICO/区域手测C#已迁移；旧场景必须人工或通过显式可撤销工具补齐CalibrationRoot及四节点引用。
+- 本条为待发布预览版，最终发布状态以包仓Tag为准。中控连接验收、Editor自动回归、真实媒体及Android/PICO/Vulkan验收分别记录，不相互替代。接入与验证要求见Documentation~/index.md。
+
+---
+
 ## [3.3.1] - 2026-07-23
 
 ### Fixed

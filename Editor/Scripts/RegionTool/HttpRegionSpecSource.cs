@@ -34,13 +34,16 @@ namespace MyVerseXRSDK.Editor
             public float height;
         }
 
-        public void Fetch(Action<List<RegionSpec>> onDone, Action<string> onError)
+        public void Fetch(EditorApiContext context, Action<List<RegionSpec>> onDone, Action<string> onError)
         {
-            if (!SdkAuthStore.TryGetApiContext(out var serverUrl, out var appId, out var accessToken, out var contextError))
+            if (context == null || !context.IsRemote)
             {
-                onError?.Invoke(contextError);
+                onError?.Invoke("规格查询需要有效的远端API上下文");
                 return;
             }
+            var serverUrl = context.ServerUrl;
+            var appId = context.AppId;
+            var accessToken = context.AccessToken;
             var url = $"{serverUrl}/api/region/list?appId={UnityWebRequest.EscapeURL(appId)}";
             EditorHttp.Get(url, accessToken,
                 onDone: json =>

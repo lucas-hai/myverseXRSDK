@@ -1,7 +1,8 @@
 {
-    "name": "MVXRSDK",
+    "name": "MVXRSDK.Runtime",
     "rootNamespace": "MyVerseXRSDK",
     "references": [
+        "MVXRSDK.Contracts",
         "Unity.WebRTC",
         "Unity.RenderPipelines.Universal.Runtime",
         "Unity.RenderPipelines.Core.Runtime"
