@@ -38,6 +38,8 @@ namespace MyVerseXRSDK
         private bool exchangeClosed;
         private bool failed;
         private bool controlStartPending;
+        private bool beginning;
+        private readonly bool enabled;
         private long controlRevision;
         internal StreamingState State { get; private set; }
         internal StreamingStatistics Statistics { get; private set; }
@@ -62,11 +64,11 @@ namespace MyVerseXRSDK
         internal event Action<StreamingStatistics> StatisticsUpdated;
 
         internal StreamSessionController(SessionService session, StreamSourceSlot sources, Func<RenderTexture> getOutput,
-            Func<IMediaPeer> createPeer, IWhipExchange exchange, MediaOptions options, Func<double> clock, Action<SdkResult> report)
+            Func<IMediaPeer> createPeer, IWhipExchange exchange, MediaOptions options, Func<double> clock, Action<SdkResult> report, bool enabled)
         {
             this.session = session; this.sources = sources; this.getOutput = getOutput;
             this.createPeer = createPeer; this.exchange = exchange; this.options = options;
-            this.clock = clock; this.report = report;
+            this.clock = clock; this.report = report; this.enabled = enabled;
             session.LiveReceived += OnLive;
             session.SessionChanged += OnSession;
         }
@@ -75,6 +77,8 @@ namespace MyVerseXRSDK
         {
             if (disposed || !session.Current.IsJoined || epoch != session.Current.Epoch) return;
             if (!start) { Stop(); return; }
+            if (!enabled)
+            { report(SdkResult.Fail(SdkErrorCode.Unavailable, "客户端未启用推流，已忽略开流通知")); return; }
             if (!Uri.TryCreate(url, UriKind.Absolute, out var address) ||
                 (address.Scheme != Uri.UriSchemeHttp && address.Scheme != Uri.UriSchemeHttps))
             { report(SdkResult.Fail(SdkErrorCode.InvalidArgument, "推流地址必须为HTTP或HTTPS地址")); return; }
@@ -96,40 +100,59 @@ namespace MyVerseXRSDK
 
         private bool IsCurrent(Attempt attempt) => !disposed && ReferenceEquals(active, attempt) && attempt.Epoch == session.Current.Epoch;
 
+        private bool IsCurrentControl(long revision) => !disposed && enabled && controlRevision == revision &&
+            desiredUrl != null && session.Current.IsJoined && session.Current.Epoch == desiredEpoch;
+
         private void Begin()
         {
-            if (disposed || desiredUrl == null || !session.Current.IsJoined || session.Current.Epoch != desiredEpoch) return;
-            var attempt = new Attempt { Epoch = desiredEpoch, Url = desiredUrl, StartedAt = clock(), Configuration = options };
+            long revision = controlRevision;
+            if (beginning || !IsCurrentControl(revision)) return;
+            beginning = true;
+            Attempt attempt = null;
             try
             {
+                sources.SetSessionActive(true);
+                SetState(StreamingState.Starting);
+                if (!IsCurrentControl(revision)) return;
+                if (controlStartPending && !PrepareSource(revision)) return;
+                attempt = new Attempt { Epoch = desiredEpoch, Url = desiredUrl, StartedAt = clock(), Configuration = options };
                 attempt.Peer = createPeer() ?? throw new InvalidOperationException("媒体会话工厂未返回实例");
                 attempt.Remote = new WhipSessionLease(exchange, options, clock, report);
                 active = attempt;
                 Subscribe(attempt);
-                sources.SetSessionActive(true);
-                SetState(StreamingState.Starting);
-                if (!IsCurrent(attempt)) return;
-                if (controlStartPending)
-                {
-                    controlStartPending = false;
-                    Notify(Starting);
-                }
-                if (!IsCurrent(attempt)) return;
                 var output = getOutput();
+                if (!IsCurrent(attempt) || !IsCurrentControl(revision)) return;
                 if (output == null) throw new InvalidOperationException("无法创建推流输出纹理");
                 attempt.Peer.Start(output, attempt.Epoch);
             }
             catch (Exception error)
             {
-                if (active == null && attempt.Peer == null)
+                if (attempt?.Peer == null)
                 {
-                    desiredUrl = null; failed = true;
+                    if (!IsCurrentControl(revision)) return;
+                    desiredUrl = null; failed = true; controlStartPending = false;
                     sources.EndSession();
-                    report(SdkResult.Fail(SdkErrorCode.MediaFailed, "创建媒体会话失败：" + error.Message));
-                    SetState(StreamingState.Failed);
+                    report(SdkResult.Fail(SdkErrorCode.MediaFailed, "准备媒体会话失败：" + error.Message));
+                    if (!disposed && controlRevision == revision) SetState(StreamingState.Failed);
                 }
                 else Fail(attempt, SdkResult.Fail(SdkErrorCode.MediaFailed, "启动媒体会话失败：" + error.Message), false);
             }
+            finally { beginning = false; }
+        }
+
+        private bool PrepareSource(long revision)
+        {
+            controlStartPending = false;
+            // 允许业务回调和导演自动相机先接源；准备期间的Tick不能递归创建第二个会话。
+            Notify(Starting);
+            if (!IsCurrentControl(revision)) return false;
+            bool ready = options.AllowBlackFrameStart || sources.HasAvailableSource;
+            if (!IsCurrentControl(revision)) return false;
+            if (ready) return true;
+            // 拒绝即撤销本次意图：后续补源/配置更新不能悄悄执行旧通知。
+            Stop();
+            report(SdkResult.Fail(SdkErrorCode.Unavailable, "首次开流画面源未就绪，已拒绝本次通知；接源后需新的开流通知"));
+            return false;
         }
 
         private void Subscribe(Attempt attempt)
@@ -231,7 +254,7 @@ namespace MyVerseXRSDK
                 return;
             }
             if (retiring.Count != 0) return;
-            if (desiredUrl != null && clock() >= retryAt) Begin();
+            if (!beginning && desiredUrl != null && clock() >= retryAt) Begin();
             else if (desiredUrl == null) SetState(failed ? StreamingState.Failed : StreamingState.Idle);
         }
 

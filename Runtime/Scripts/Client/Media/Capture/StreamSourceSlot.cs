@@ -16,6 +16,18 @@ namespace MyVerseXRSDK
         private bool endRequested;
         internal IStreamSource Current { get; private set; }
         internal bool IsReleased => disposed && !mutating && Current == null;
+        internal bool HasAvailableSource
+        {
+            get
+            {
+                var source = Current;
+                if (disposed || mutating || source == null) return false;
+                // 可用性读取也属于在途使用，重入关闭须等getter退出后才能释放输出。
+                mutating = true;
+                try { return source.IsAvailable && !disposed && ReferenceEquals(Current, source); }
+                finally { FinishMutation(); }
+            }
+        }
 
         internal StreamSourceSlot(Func<RenderTexture> getOutput, Action clearOutput, Action<SdkResult> report)
             : this(getOutput, clearOutput, report, null) { }

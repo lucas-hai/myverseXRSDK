@@ -11,6 +11,8 @@ namespace MyVerseXRSDK
         public SessionOptions Session { get; set; } = new SessionOptions();
         public SpatialOptions Spatial { get; set; } = new SpatialOptions();
         public DeviceOptions Devices { get; set; } = new DeviceOptions();
+        /// <summary>显式启用本机推流，默认关闭；创建后不能通过媒体参数或Rig隐式开启。</summary>
+        public bool EnableStreaming { get; set; }
         public MediaOptions Media { get; set; } = new MediaOptions();
         public SdkLogOptions Logging { get; set; } = new SdkLogOptions();
         /// <summary>会话终态失败时在已绑定Head前显示默认提示；自定义业务UI可关闭此项。</summary>
@@ -33,7 +35,7 @@ namespace MyVerseXRSDK
             return new SdkOptions
             {
                 DeviceId = DeviceId, Session = Session.Capture(), Spatial = spatial, Devices = devices,
-                Media = Media.Capture(), Logging = Logging.Capture(), ShowNetworkFailureHud = ShowNetworkFailureHud
+                EnableStreaming = EnableStreaming, Media = Media.Capture(), Logging = Logging.Capture(), ShowNetworkFailureHud = ShowNetworkFailureHud
             };
         }
     }

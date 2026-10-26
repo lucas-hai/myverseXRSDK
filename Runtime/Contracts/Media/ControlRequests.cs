@@ -20,6 +20,7 @@ namespace MyVerseXRSDK
         public int Lenses { get; set; } = 1;
         public int DurationSeconds { get; set; } = 10;
         public bool Record { get; set; }
+        /// <summary>Record为true时使用的录制名称；协议约定不含扩展名，SDK原样透传而不增删后缀。</summary>
         public string FileName { get; set; }
         public Camera AutoCamera { get; set; }
     }

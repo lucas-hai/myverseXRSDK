@@ -36,6 +36,7 @@ namespace MyVerseXRSDK.EditorDemos
             if (Client != null) return SdkResult.Fail(SdkErrorCode.Busy, "请先等待旧客户端安全关闭");
             var options = new SdkOptions
             {
+                EnableStreaming = true, // 本示例包含Unity独立机位接入；不等于立即开流。
                 DeviceId = deviceId,
                 Session = new SessionOptions
                 {

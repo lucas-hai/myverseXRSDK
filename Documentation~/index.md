@@ -190,7 +190,23 @@ External 联调开流使用 `writer.NotifyLive(revision, fullWhipUrl, true)`，�
 
 ## 7. 导演、画面源与游戏音
 
-导演请求示例：
+### 显式启用与首次开流
+
+`SdkOptions.EnableStreaming`默认false，在Create时捕获；只接入中控/空间的业务无需配置推流源。需要本机媒体时显式设置：
+
+```csharp
+var options = new SdkOptions { DeviceId = deviceId, EnableStreaming = true };
+// 按业务选择Session配置后创建；开启能力本身不会开流。
+var client = MVXRSDK.Create(options);
+```
+
+- `Streaming.IsEnabled`只读。禁用时收到开流通知仅报告Unavailable诊断，不触发Starting，不创建推流RT、Peer、音视频轨道或WHIP请求，也不安排媒体重试。
+- 启用后，新的开流通知先进入Starting准备阶段，允许同步回调接源并处理Director自动相机，之后才检查有效源并创建媒体资源。Starting不代表已创建Peer或已经连接。
+- 有效源指已接管且`IsAvailable`，不等待实际首帧像素渲染。无有效源默认拒绝本次通知并回到Idle；补源、更新配置或Tick不会重放，需新的开流通知。
+- 业务确需首次无源黑帧启动时，显式设置`Media.AllowBlackFrameStart=true`。这不会开启EnableStreaming；已经接纳的控制会话在清源或恢复时仍可用黑帧。
+- Stop、换房、关闭和更新的开流通知会撤销旧准备意图；不会在源尚未准备时先开流再立即停流。
+
+以下导演示例假设该客户端已显式启用本机推流：
 
 ```csharp
 client.Director.Request(new DirectorRequest
@@ -203,6 +219,8 @@ client.Director.Request(new DirectorRequest
 
 受理 ≠ 选中 ≠ 已连接。`Director.Selected` 为协议观察事件；本机新有效开流意图到达后触发 `Streaming.Starting`，媒体连接完成后 State 为 `Streaming`。自动恢复不再次消费导演候选，也不再次发布新的选中信号。
 
+若导演请求设置`Record=true`，`FileName`按协议填写不含扩展名的名称，例如`business-record`。SDK仅原样透传，不追加或删除`.mp4`；最终文件命名与生成结果由服务端决定，不能把请求受理当作文件已经完成。
+
 - 有 `AutoCamera` 时，SDK 在被选中后自动接源；手动源优先；自动源在控制会话终止时释放。
 - 无相机时空 Source 保留为空（原直播合法值）；指定 AutoCamera 且空 Source 才补 `unity`。
 - 候选相机有代次与过期限制；`CancelPendingCamera()` 不会撤销已受理的远端仲裁或停止正在推的流。
@@ -213,7 +231,7 @@ client.Director.Request(new DirectorRequest
 
 提供 `CameraStreamSource`（独立相机直渲普通 RT）和 `RenderTextureStreamSource`（普通 Tex2D Blit）。底层相机/外部 RT 为借用对象，不因源适配器释放而被销毁。
 
-推流活跃且已有不同源时返回 Busy，不抢占、不排队；同源重复提交幂等。空闲时可以替换。输出固定 16:9、偶数对齐，默认 1280×720；无源时推黑帧。清源不销毁编码器仍借用的输出 RT。
+推流活跃且已有不同源时返回 Busy，不抢占、不排队；同源重复提交幂等。空闲时可以替换。未启用推流时TrySetSource返回Invalid，不接管、不Dispose输入，也不创建预览RT。输出固定16:9、偶数对齐，默认1280×720；首次无源开流受AllowBlackFrameStart控制，已开流后清源仍输出黑帧。清源不销毁编码器仍借用的输出RT。
 
 手动源默认跨正常停流保留；场景卸载前必须 `ClearSource()`，随后再销毁借用相机或 RT。相机 targetTexture 被业务重新接管后，SDK 不覆盖业务的新设置。
 
@@ -221,7 +239,7 @@ client.Director.Request(new DirectorRequest
 
 音频只有游戏音，不采麦克风。使用 `CaptureGameAudio(listener)` 取得可释放绑定句柄，或调用 `PushGameAudioPcm(pcm, sampleRate, channels)`。支持 8000–192000Hz、mono/stereo；stereo 折叠为 mono，连续重采样，有界缓冲写满丢最旧、读空补零。
 
-`MVXRStreamRig.Bind(client)` 显式绑定实例，应用 `StreamConfigAsset` 的完整媒体配置并采集指定 Listener；组件不拥有主相机或切镜编排。
+`MVXRStreamRig.Bind(client)`显式绑定已启用推流的实例，应用`StreamConfigAsset`完整媒体参数并采集指定Listener；禁用客户端返回Unavailable，不改变原绑定。配置资产不会授予推流能力；组件不拥有主相机或切镜编排。禁用时CaptureGameAudio抛InvalidOperationException，PushGameAudioPcm返回Unavailable，不添加采集组件或分配音频缓冲。
 
 `ApplyConfiguration` 要求 Version 递增：采集节流和重试策略即时更新；协商参数下一媒体会话生效。更改输出尺寸前须无媒体会话且已清源；音频环形缓冲容量仅创建客户端时配置。
 

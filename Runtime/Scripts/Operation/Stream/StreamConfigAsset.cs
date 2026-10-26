@@ -49,6 +49,10 @@ namespace MyVerseXRSDK
                  "• com.unity.webrtc 未编译 H.264 时设 true 会握手期报 CodecNegotiationFailed")]
         public bool ForceH264 = true;
 
+        [Header("首次开流策略")]
+        [Tooltip("允许无画面源时以黑帧启动；默认拒绝。不会开启未授权客户端的推流能力，运行中清源仍输出黑帧。") ]
+        public bool AllowBlackFrameStart;
+
         [Header("配置版本与网络策略")]
         [Min(1)] public int ConfigurationVersion = 1;
         [Min(1)] public int IceGatheringTimeoutSeconds = 3;
@@ -66,6 +70,7 @@ namespace MyVerseXRSDK
         {
             return new MediaOptions
             {
+                AllowBlackFrameStart = AllowBlackFrameStart,
                 Version = ConfigurationVersion, FramesPerSecond = Fps, OutputLongSide = StreamMaxLongSide,
                 VideoBandwidthKbps = VideoBandwidthKbps, VideoMinBitrateKbps = VideoMinBitrateKbps, ForceH264 = ForceH264,
                 IceGatheringTimeoutSeconds = IceGatheringTimeoutSeconds, HttpTimeoutSeconds = HttpTimeoutSeconds,

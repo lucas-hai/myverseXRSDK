@@ -2,7 +2,7 @@
 
 多人 XR 协作 SDK：房间接入、XR 逆校准、障碍物与设备虚影、WHIP/WebRTC 推流、导演仲裁及远端录制命令。
 
-**4.x 是不兼容3.x C# API的主版本。当前候选版本为 `4.0.0-preview.1`，适合按下述流程接入验证；是否已发布以独立包仓实际Tag为准，不将候选版本视为正式稳定版。**
+**4.x 是不兼容3.x C# API的主版本。本包版本为 `4.0.0-preview.2`（预览版），适合按下述流程接入验证；可安装版本以独立包仓实际Tag为准，不将预览版本视为正式稳定版。**
 
 ## 环境与安装
 
@@ -33,6 +33,8 @@ if (!result.Success) { Debug.LogError(result.Message); client.Dispose(); }
 
 SDK只写专用 `CalibrationRoot` 和自有表现对象，不移动地图、业务移动根或头手追踪节点。场景需明确配置 `MotionRoot → CalibrationRoot → TrackingRoot → Head`；缺失时不会猜测角色或自动移动地图。
 
+推流是可选能力，`SdkOptions.EnableStreaming`默认false；需要媒体的客户端须在Create前显式开启。仅设置中控地址、应用StreamConfigAsset或绑定Rig不会开启能力。启用后首次无有效源默认拒绝；`Media.AllowBlackFrameStart=true`才允许首次黑帧开流，已开流后清源仍保持黑帧。从`4.0.0-preview.1`升级时，已有推流宿主需补上显式启用并准备有效源；本版本变更见CHANGELOG，旧Tag内容不变。
+
 ## 文档与示例
 
 - [接入与3.x迁移指南](Documentation~/index.md)
@@ -46,7 +48,7 @@ SDK只写专用 `CalibrationRoot` 和自有表现对象，不移动地图、业�
 |---|---|
 | `01_Connection` | 创建客户端、真实会话状态与安全关闭 |
 | `02_Spatial` | Inspector配置后Play自动连接；校准、区域地面、柱子、同房/跨房虚影 |
-| `03_Business` | 准入通知与显式扣费、导演、远端录制命令 |
+| `03_Business` | 准入通知、中控导演与远端录制命令；无扣费入口 |
 | `04_Streaming` | 手填完整WHIP URL直推；独立相机/普通RT、游戏音 |
 | `05_CrossSceneA` / `06_CrossSceneB` | 同一客户端跨场景，旧Rig解绑、新Rig绑定 |
 | `07_ControlledStreaming` | 连接中控、申请导演机位，等待NotifyLive控制开停 |

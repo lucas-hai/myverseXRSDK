@@ -17,6 +17,8 @@ namespace MyVerseXRSDK
         private bool stopping;
         private AudioCaptureHandle audioCapture;
         internal bool IsReleased { get; private set; }
+        /// <summary>创建时捕获的推流能力；配置更新、绑定Rig或接源都不会改变它。</summary>
+        public bool IsEnabled => context.Options.EnableStreaming;
         public StreamingState State => controller.State;
         public StreamingStatistics Statistics => controller.Statistics;
         public IStreamSource CurrentSource => sources.Current;
@@ -30,13 +32,16 @@ namespace MyVerseXRSDK
         {
             this.context = context; this.session = session; this.director = director;
             configuration = context.Options.Media;
-            int rate = AudioSettings.outputSampleRate;
-            audio = new GameAudioBuffer(rate > 0 ? rate : 48000, configuration.AudioBufferSamples);
+            if (IsEnabled)
+            {
+                int rate = AudioSettings.outputSampleRate;
+                audio = new GameAudioBuffer(rate > 0 ? rate : 48000, configuration.AudioBufferSamples);
+            }
             this.output = output ?? new StreamOutputSurface(configuration.OutputLongSide);
             sources = new StreamSourceSlot(this.output.Ensure, this.output.Clear, Report, context.Log);
             controller = new StreamSessionController(session, sources, this.output.Ensure,
                 createPeer ?? (() => new WebRtcMediaPeer(context.Host, configuration, audio)),
-                exchange ?? new UnityWhipExchange(context.Host), configuration, () => Time.realtimeSinceStartupAsDouble, Report);
+                exchange ?? new UnityWhipExchange(context.Host), configuration, () => Time.realtimeSinceStartupAsDouble, Report, IsEnabled);
             controller.Starting += OnStarting;
             controller.Changed += OnChanged;
             controller.StatisticsUpdated += OnStatistics;
@@ -77,7 +82,7 @@ namespace MyVerseXRSDK
         public SourceSetResult TrySetSource(IStreamSource source)
         {
             context.EnsureAlive();
-            if (stopping) return SourceSetResult.Invalid;
+            if (stopping || !IsEnabled) return SourceSetResult.Invalid;
             return sources.TrySet(source, false);
         }
 
@@ -90,13 +95,15 @@ namespace MyVerseXRSDK
         }
 
         /// <summary>输入mono/stereo游戏PCM，允许音频线程调用；不持有数组，不在音频线程输出日志。</summary>
-        public SdkResult PushGameAudioPcm(float[] pcm, int sampleRate, int channels) => audio.Push(pcm, sampleRate, channels);
+        public SdkResult PushGameAudioPcm(float[] pcm, int sampleRate, int channels)
+            => audio != null ? audio.Push(pcm, sampleRate, channels) : SdkResult.Fail(SdkErrorCode.Unavailable, "客户端未启用推流");
 
         /// <summary>在指定Listener上采集游戏音；替换旧绑定，不采麦克风，不修改扬声器PCM或Listener状态。</summary>
         public AudioCaptureHandle CaptureGameAudio(AudioListener listener)
         {
             context.EnsureAlive();
             if (stopping) throw new ObjectDisposedException(nameof(StreamingService));
+            if (!IsEnabled) throw new InvalidOperationException("客户端未启用推流；不能绑定游戏音采集");
             if (listener == null) throw new ArgumentNullException(nameof(listener));
             if (audioCapture != null && audioCapture.Listener == listener && audioCapture.Tap != null) return audioCapture;
             // Destroy到帧末才生效，已Detach的旧组件不能阻止本帧的新租约；仍只允许一个活跃采集者。
@@ -147,14 +154,14 @@ namespace MyVerseXRSDK
             if (stopping) TryRelease();
         }
 
-        internal void TickSource() { if (!stopping) sources.Tick(Time.unscaledTimeAsDouble, configuration.FramesPerSecond); }
+        internal void TickSource() { if (!stopping && IsEnabled) sources.Tick(Time.unscaledTimeAsDouble, configuration.FramesPerSecond); }
 
         internal void BeginShutdown()
         {
             if (stopping) return;
             stopping = true;
             audioCapture?.Dispose();
-            audio.Dispose();
+            audio?.Dispose();
             controller.Dispose();
             sources.Dispose();
             TryRelease();

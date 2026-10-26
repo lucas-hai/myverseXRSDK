@@ -6,7 +6,25 @@
 
 ---
 
-## [4.0.0-preview.1] - 待发布（候选整理：2026-10-23）
+## [4.0.0-preview.2] - 2026-10-26
+
+### 推流可选接入（行为调整）
+- 新增SdkOptions.EnableStreaming，默认false且Create捕获；未启用收到开流通知只诊断，不创建媒体资源或发起WHIP。
+- 新增MediaOptions/StreamConfigAsset.AllowBlackFrameStart，默认false；源准备先于Peer创建，无有效源拒绝本次控制意图，补源/配置更新不复活旧通知。
+- 保留Starting同步接源和导演自动相机；已开流清源、源失效及控制会话恢复继续使用黑帧，资源所有权与安全释放规则不变。
+- 03/04/07及媒体专项宿主显式启用；02和现有场景资产不改。Rig和配置资产不能隐式开启能力。
+
+### Editor业务示例
+- 03移除账务地址配置、自助扣费方法和菜单；03/04/07推流示例均不提供扣费入口。SDK Billing独立可选能力保持不变。
+- 03_Business新增独立的中控推流请求配置组，对应Source、Lenses、DurationSeconds、Record、FileName；统一按配置显式申请，不再由快捷菜单覆盖来源或固定10秒。
+- 本地独立相机引用与中控参数分离；仅Source为unity时附自动相机，空Source保留原直播语义，不改SDK协议或场景资产。
+- 补充导演录制FileName的协议约定：名称不含扩展名；SDK原样透传，不追加/删除后缀。正常示例与后缀透传边界测试分开，不把替代传输的受理结果当作后端录制验证。
+
+### 升级与验证边界
+- 从preview.1升级的推流宿主须在Create前显式设置EnableStreaming=true并准备有效画面源；首次无源黑帧仅在明确选择AllowBlackFrameStart时允许。
+- 本版仍为预览版；Editor自动回归与UPM导入不代替真实WHIP收端、远端录制文件及Android/PICO/Vulkan真机验收。
+
+## [4.0.0-preview.1] - 2026-10-24
 
 ### 破坏性变更
 - 入口改为 `MVXRSDK.Create(SdkOptions) → SdkClient` 及所属域服务；删除旧静态业务 API、自动 Bootstrap、Manager/Module 和全局调度/事件/网络/媒体链，不保留兼容门面。

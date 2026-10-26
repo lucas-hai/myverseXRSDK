@@ -1233,9 +1233,14 @@ MonoBehaviour:
   deviceId: editor-business
   connectionMode: 1
   controlServerUrl: 
-  billingBaseUrl: 
-  recordingTargetId: 
+  streamingRequest:
+    source: unity
+    lenses: 1
+    durationSeconds: 10
+    record: 0
+    fileName: 
   directorCamera: {fileID: 377017468}
+  recordingTargetId: 
 --- !u!4 &740155934
 Transform:
   m_ObjectHideFlags: 0

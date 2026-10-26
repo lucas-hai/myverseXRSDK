@@ -26,6 +26,7 @@ namespace MyVerseXRSDK.Streaming
         {
             if (owner == null || owner.State == SdkClientState.Stopping || owner.State == SdkClientState.Disposed || owner.State == SdkClientState.Faulted)
                 return SdkResult.Fail(SdkErrorCode.InvalidState, "Rig需要存活客户端");
+            if (!owner.Streaming.IsEnabled) return SdkResult.Fail(SdkErrorCode.Unavailable, "客户端未启用推流；请在创建时设置EnableStreaming");
             if (!ReferenceEquals(client, owner) && streamConfigAsset != null)
             {
                 var configured = streamConfigAsset.ApplyTo(owner.Streaming);

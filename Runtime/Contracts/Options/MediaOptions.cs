@@ -3,6 +3,8 @@ namespace MyVerseXRSDK
     /// <summary>媒体配置整体快照；输出规格只在无会话时重建，协商参数在下次会话生效。</summary>
     public sealed class MediaOptions
     {
+        /// <summary>明确允许新控制会话在无画面源时以黑帧启动；默认拒绝，不影响运行中清源及恢复。</summary>
+        public bool AllowBlackFrameStart { get; set; }
         public int Version { get; set; } = 1;
         public int OutputLongSide { get; set; } = 1280;
         public int FramesPerSecond { get; set; } = 30;

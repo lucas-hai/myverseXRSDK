@@ -24,6 +24,7 @@ namespace MyVerseXRSDK.EditorDemos
             if (Client != null) return SdkResult.Fail(SdkErrorCode.Busy, "等待客户端释放");
             var options = new SdkOptions
             {
+                EnableStreaming = true, // 显式接入媒体能力，开流仍由菜单触发。
                 DeviceId = "editor-streaming", Session = new SessionOptions { Mode = SessionConnectionMode.External },
                 Spatial = new SpatialOptions { Mode = SpatialMode.Disabled, ShowObstacles = false, ShowFloor = false },
                 Devices = new DeviceOptions { ReportingEnabled = false, AvatarsEnabled = false },

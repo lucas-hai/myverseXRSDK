@@ -124,13 +124,15 @@ OperationHandle RecordingService.Start(RecordingRequest request, Action<Operatio
 | DirectorRequest | `Source=null`（无相机时保持空协议值）；`Lenses=1`；`DurationSeconds=10`；`Record=false`；`FileName=null`；`AutoCamera=null` |
 | RecordingRequest | `TargetKind=Device`（另有Camera）；`TargetId` 必填；`DurationSeconds=60`；`FileName=null` |
 
-导演镜头数至少1，导演/录制时长为正。AutoCamera 为借用，只有 Source 空或 unity 时合法。录制按 TargetKind+TargetId 互斥，不同目标可并发。
+导演镜头数至少1，导演/录制时长为正。AutoCamera 为借用，只有 Source 空或 unity 时合法。`DirectorRequest.FileName`仅在Record=true时有意义，协议约定填写不含扩展名的名称（如`business-record`）；SDK原样透传，不增删后缀，不保证服务端兼容带扩展名的输入。录制按 TargetKind+TargetId 互斥，不同目标可并发。
 
 `OperationHandle`：RequestId、TargetId、IsCompleted、Outcome，`void Cancel()`。Cancel 不能撤销远端动作。
 
 `OperationResult`：RequestId、TargetId、Result、Success、WasCached、RemoteOutcomeUnknown。远端结果未知时不能把请求当作从未发生；这些非幂等命令不自动重试。
 
 ## 6. 推流
+
+创建客户端时须显式设置`SdkOptions.EnableStreaming=true`（默认false），`Streaming.IsEnabled`为捕获后的只读值。配置更新或Rig绑定不改变能力授权。禁用收到NotifyLive只报告Unavailable诊断，不启动媒体或重试。
 
 ```csharp
 MediaOptions StreamingService.GetConfiguration();
@@ -141,13 +143,13 @@ SdkResult StreamingService.PushGameAudioPcm(float[] pcm, int sampleRate, int cha
 AudioCaptureHandle StreamingService.CaptureGameAudio(AudioListener listener);
 ```
 
-属性：`State`、`Statistics`、`CurrentSource`。不要直接 Dispose 已接受的 CurrentSource，应调用 ClearSource。
+属性：`IsEnabled`、`State`、`Statistics`、`CurrentSource`。不要直接 Dispose 已接受的 CurrentSource，应调用 ClearSource。
 
-事件：`Action Starting`、`Action<StreamingState> Changed`、`Action<StreamingStatistics> StatisticsUpdated`。
+事件：`Action Starting`、`Action<StreamingState> Changed`、`Action<StreamingStatistics> StatisticsUpdated`。Starting是新控制意图的源准备时机，发生在Peer创建前；业务同步回调及导演自动相机准备完成后才检查源。默认无有效源则诊断Unavailable并回到Idle，清除本次意图，不因补源/配置更新自动开流；新的通知可重试。AllowBlackFrameStart=true显式允许首次黑帧，已接纳控制会话的清源/丢源及自动恢复保持黑帧。
 
 StreamingState：`Idle / Starting / Streaming / Recovering / Stopping / Failed`。
 
-SourceSetResult：Accepted（转移所有权）、Busy、Invalid（后两者不接管、不 Dispose 输入）。推流中已有不同源时 Busy；同源幂等。
+SourceSetResult：Accepted（转移所有权）、Busy、Invalid（后两者不接管、不Dispose输入）。禁用时TrySetSource返回Invalid，不分配输出；推流中已有不同源时Busy，同源幂等。禁用时CaptureGameAudio抛InvalidOperationException，PushGameAudioPcm返回Unavailable，Rig.Bind返回Unavailable；GetConfiguration/ApplyConfiguration可管理参数但不能开启能力。
 
 `StreamingStatistics`：SessionEpoch、Timestamp、IsValid、VideoBitrateKbps、AudioBitrateKbps、TotalBitrateKbps、RttMilliseconds、PacketsLost。停止后统计失效；不要把旧统计当成新会话数据。
 
@@ -169,6 +171,7 @@ PCM 可在音频线程写入：8k–192kHz，1或2声道、完整采样帧。调
 | 配置 | 默认值/约束 |
 |---|---|
 | DeviceId | 必填、非空白、≤64字符，不含空格及 `/ ? #` |
+| EnableStreaming | false；Create时捕获，媒体参数及Rig不能隐式开启 |
 | ShowNetworkFailureHud | true；无Head绑定不创建默认视图 |
 | Session.Mode | Directory；另有ControlServer、External |
 | Directory模式入口 | SDK内部固定`http://localhost:8868/v1/vr/service/config`，不提供地址配置项 |
@@ -209,6 +212,7 @@ PCM 可在音频线程写入：8k–192kHz，1或2声道、完整采样帧。调
 
 | 配置 | 默认值/约束 |
 |---|---|
+| AllowBlackFrameStart | false；仅显式允许新的控制会话无源黑帧启动，不影响运行中清源 |
 | Version | 1；更新必须大于当前版本 |
 | OutputLongSide | 1280；范围146–4096，计算输出时按16:9偶数对齐 |
 | FramesPerSecond | 30；正数，实际受设备能力限制 |

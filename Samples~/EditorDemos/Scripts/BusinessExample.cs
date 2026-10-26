@@ -3,14 +3,20 @@ using UnityEngine;
 
 namespace MyVerseXRSDK.EditorDemos
 {
-    /// <summary>业务接入：准入通知、显式扣费、导演和录制命令；不把请求受理当业务完成。</summary>
+    /// <summary>业务接入：准入通知、中控导演和录制命令；不把请求受理当业务完成。</summary>
     public sealed class BusinessExample : MonoBehaviour
     {
         public string deviceId = "editor-business";
         [Header("中控接入（进入Play自动连接）")]
         public ControlConnectionMode connectionMode = ControlConnectionMode.ControlServer;
-        public string controlServerUrl = "", billingBaseUrl = "", recordingTargetId = "";
+        public string controlServerUrl = "";
+        [Header("中控推流请求参数")]
+        public DirectorRequestSettings streamingRequest = new DirectorRequestSettings();
+        [Header("本地独立机位（不发送给中控）")]
+        [Tooltip("仅Source为unity时作为自动相机候选；必须使用独立相机，不采集主相机或屏幕。")]
         public Camera directorCamera;
+        [Header("独立远端录制命令")]
+        public string recordingTargetId = "";
         public SdkClient Client { get; private set; }
         public OperationHandle LastOperation { get; private set; }
 
@@ -25,14 +31,15 @@ namespace MyVerseXRSDK.EditorDemos
             DemoConsole.Result(this, "启动", StartClient());
         }
 
-        /// <summary>创建真实中控客户端并订阅准入；不自动发送扣费、导演或录制命令。</summary>
+        /// <summary>创建真实中控客户端并订阅准入；不自动发送导演或录制命令，不接入扣费。</summary>
         public SdkResult StartClient()
         {
             if (Client != null) return SdkResult.Fail(SdkErrorCode.Busy, "等待旧客户端释放");
             var options = new SdkOptions
             {
+                EnableStreaming = true, // 本示例包含Unity独立机位接入；不等于立即开流。
                 DeviceId = deviceId,
-                Session = new SessionOptions { Mode = connectionMode == ControlConnectionMode.Directory ? SessionConnectionMode.Directory : SessionConnectionMode.ControlServer, ControlServerUrl = controlServerUrl, BillingBaseUrl = billingBaseUrl },
+                Session = new SessionOptions { Mode = connectionMode == ControlConnectionMode.Directory ? SessionConnectionMode.Directory : SessionConnectionMode.ControlServer, ControlServerUrl = controlServerUrl },
                 Spatial = new SpatialOptions { Mode = SpatialMode.Disabled, ShowObstacles = false, ShowFloor = false },
                 Devices = new DeviceOptions { ReportingEnabled = false, AvatarsEnabled = false },
                 ShowNetworkFailureHud = false
@@ -54,21 +61,14 @@ namespace MyVerseXRSDK.EditorDemos
             if (Client != null && Client.State == SdkClientState.Running) return true;
             Debug.Log("请先启动客户端；业务命令只在显式调用时发送。", this); return false;
         }
-        /// <summary>显式请求自助扣费；同初始化周期成功后复用SDK缓存，在途时返回null。</summary>
-        public OperationHandle VerifyAccess()
+        /// <summary>按当前中控参数显式申请机位；受理不代表中选或开流，无法发送或缺少配置时返回null。</summary>
+        public OperationHandle RequestDirector()
         {
             if (!CanSend()) return null;
+            if (streamingRequest == null)
+            { Debug.LogWarning("请先配置中控推流请求参数。", this); return null; }
             var owner = Client;
-            LastOperation = Client.Billing.VerifyAccess(result => OnResult(owner, result));
-            return LastOperation;
-        }
-        /// <summary>显式申请Unity独立机位或原直播；受理不代表中选或开流，在途时返回null。</summary>
-        public OperationHandle RequestDirector(bool unityCamera)
-        {
-            if (!CanSend()) return null;
-            var owner = Client;
-            LastOperation = Client.Director.Request(new DirectorRequest
-            { Source = unityCamera ? "unity" : "", AutoCamera = unityCamera ? directorCamera : null, DurationSeconds = 10 }, result => OnResult(owner, result));
+            LastOperation = Client.Director.Request(streamingRequest.CreateRequest(directorCamera), result => OnResult(owner, result));
             return LastOperation;
         }
         /// <summary>显式请求目标远端录制10秒；成功不代表文件完成，在途时返回null。</summary>
@@ -96,12 +96,8 @@ namespace MyVerseXRSDK.EditorDemos
             closing.Admission.StartRequested -= OnAdmission;
             closing.Shutdown(result => { if (ReferenceEquals(Client, closing)) Client = null; LastOperation = null; DemoConsole.Result(this, "关闭", result); });
         }
-        [ContextMenu("业务/明确扣费")]
-        private void VerifyFromMenu() => VerifyAccess();
-        [ContextMenu("业务/申请Unity独立机位")]
-        private void RequestUnityFromMenu() => RequestDirector(true);
-        [ContextMenu("业务/申请原直播")]
-        private void RequestOriginalFromMenu() => RequestDirector(false);
+        [ContextMenu("业务/按配置申请中控机位")]
+        private void RequestDirectorFromMenu() => RequestDirector();
         [ContextMenu("业务/远端录制10秒")]
         private void RecordFromMenu() => StartRecording();
         /// <summary>仅取消本地等待，不撤回远端已执行的命令。</summary>
