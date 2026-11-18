@@ -34,6 +34,7 @@ namespace MyVerseXRSDK
         private long desiredEpoch;
         private int retries;
         private double retryAt;
+        private double retryStartedAt;
         private bool disposed;
         private bool exchangeClosed;
         private bool failed;
@@ -57,7 +58,7 @@ namespace MyVerseXRSDK
                 RetireActive();
                 if (!disposed && controlRevision == revision) SetState(StreamingState.Failed);
             }
-            else if (retries > 0) retryAt = clock() + value.RetryDelaysMilliseconds[retries - 1] / 1000.0;
+            else if (retries > 0) retryAt = retryStartedAt + value.RetryDelaysMilliseconds[retries - 1] / 1000.0;
         }
         internal event Action Starting;
         internal event Action<StreamingState> Changed;
@@ -203,7 +204,9 @@ namespace MyVerseXRSDK
             RetireActive(!recover);
             if (recover)
             {
-                retryAt = clock() + options.RetryDelaysMilliseconds[retries++] / 1000.0;
+                // 热更新重试间隔时仍以本次失败为起点，改画质不会延后恢复。
+                retryStartedAt = attempt.StoppedAt;
+                retryAt = retryStartedAt + options.RetryDelaysMilliseconds[retries++] / 1000.0;
                 SetState(StreamingState.Recovering);
             }
             else
@@ -266,7 +269,7 @@ namespace MyVerseXRSDK
                 attempt.Peer.Tick();
                 attempt.Remote.Tick();
                 if (attempt.Peer.IsReleased && attempt.Remote.IsReleased) { retiring.RemoveAt(index); continue; }
-                if (!attempt.Peer.IsReleased && !attempt.DrainReported && clock() - attempt.StoppedAt >= attempt.Configuration.AudioDrainWarningSeconds)
+                if (!attempt.DrainReported && attempt.Peer.AudioDrainPending && clock() - attempt.StoppedAt >= attempt.Configuration.AudioDrainWarningSeconds)
                 {
                     attempt.DrainReported = true;
                     report(SdkResult.Fail(SdkErrorCode.AudioDrainStalled, "音频在途回调尚未退出，继续等待，不强制释放native资源"));

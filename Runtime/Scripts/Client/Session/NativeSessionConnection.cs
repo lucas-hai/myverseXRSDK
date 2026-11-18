@@ -128,6 +128,8 @@ namespace MyVerseXRSDK
             if (string.Equals(address ?? string.Empty, roomAddress ?? string.Empty, StringComparison.Ordinal)) return;
             long captured = generation;
             ++loginAttempt;
+            // 旧目标先退役；结束通知的同步回调不能重新连接已解散的房间。
+            roomAddress = null;
             ReportOnline(false);
             commands.Disconnect();
             session.EndSession();
@@ -199,7 +201,8 @@ namespace MyVerseXRSDK
 
         internal void RestartReferenceFrame()
         {
-            if (!IsActive) return;
+            // 尚无房间目标时，空间失效不应撤销查找中控或等待分房的请求。
+            if (!IsActive || string.IsNullOrEmpty(roomAddress)) return;
             ++generation;
             ++loginAttempt;
             httpRequest?.Dispose();

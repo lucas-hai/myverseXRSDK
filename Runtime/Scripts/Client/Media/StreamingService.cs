@@ -66,7 +66,7 @@ namespace MyVerseXRSDK
             if (captured.AudioBufferSamples != configuration.AudioBufferSamples)
                 return SdkResult.Fail(SdkErrorCode.InvalidArgument, "音频缓冲容量仅能在创建客户端时设置");
             bool resize = captured.OutputLongSide != configuration.OutputLongSide;
-            if (resize && (!controller.CanReconfigureOutput || sources.Current != null))
+            if (resize && (!controller.CanReconfigureOutput || !sources.CanResizeOutput))
                 return SdkResult.Fail(SdkErrorCode.Busy, "变更输出尺寸前须停止媒体并清除画面源");
             if (resize)
             {

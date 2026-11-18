@@ -26,7 +26,8 @@ namespace MyVerseXRSDK.EditorDemos.Editor
             try
             {
                 var visuals = new EditorDemoVisuals(Root);
-                foreach (string name in Names) BuildScene(name, visuals);
+                var profile = CreateStreamingProfile(Root);
+                foreach (string name in Names) BuildScene(name, visuals, profile);
                 LinkPair();
                 Debug.Log("[Editor Demo] 七个独立场景生成完成；未修改Build Settings。");
             }
@@ -46,7 +47,7 @@ namespace MyVerseXRSDK.EditorDemos.Editor
                 string shaderPath = AssetDatabase.GetAssetPath(Shader.Find("MyVerse/EditorDemoUnlit"));
                 if (string.IsNullOrEmpty(shaderPath)) throw new InvalidOperationException("缺少示例Shader");
                 string sampleRoot = Path.GetDirectoryName(shaderPath).Replace(Path.DirectorySeparatorChar, '/');
-                BuildScene("07_ControlledStreaming", new EditorDemoVisuals(sampleRoot, true), output);
+                BuildScene("07_ControlledStreaming", new EditorDemoVisuals(sampleRoot, true), CreateStreamingProfile(output), output);
                 Debug.Log("[Editor Demo] 中控推流新场景生成完成，复用示例材质；原场景未改。");
             }
             finally { EditorSceneManager.RestoreSceneManagerSetup(setup); }
@@ -65,7 +66,16 @@ namespace MyVerseXRSDK.EditorDemos.Editor
                 }
             }
         }
-        private static void BuildScene(string name, EditorDemoVisuals visuals, string outputRoot = Root)
+        private static StreamConfigAsset CreateStreamingProfile(string outputRoot)
+        {
+            AssetDatabase.CreateFolder(outputRoot, "Config");
+            var profile = ScriptableObject.CreateInstance<StreamConfigAsset>();
+            profile.StreamMaxLongSide = 640; // 保留示例预览的低开销规格，而非修改 SDK 默认值。
+            AssetDatabase.CreateAsset(profile, outputRoot + "/Config/EditorDemoStreamConfig.asset");
+            return profile;
+        }
+
+        private static void BuildScene(string name, EditorDemoVisuals visuals, StreamConfigAsset profile, string outputRoot = Root)
         {
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
             SceneManager.SetActiveScene(scene);
@@ -83,10 +93,11 @@ namespace MyVerseXRSDK.EditorDemos.Editor
                             out spatial.leftHand, out spatial.rightHand);
                         break;
                     case "03_Business":
-                        entry.AddComponent<BusinessExample>().directorCamera = visuals.CreateSourceCamera();
+                        entry.AddComponent<BusinessExample>();
                         break;
                     case "04_Streaming":
                         var streaming = entry.AddComponent<StreamingExample>();
+                        streaming.streamConfigAsset = profile;
                         streaming.sourceCamera = visuals.CreateSourceCamera();
                         streaming.gameListener = observer.GetComponent<AudioListener>();
                         streaming.audioSignal = new GameObject("游戏测试音_非麦克风").AddComponent<DemoAudioSignal>();
@@ -94,6 +105,7 @@ namespace MyVerseXRSDK.EditorDemos.Editor
                         break;
                     case "07_ControlledStreaming":
                         var controlled = entry.AddComponent<ControlledStreamingExample>();
+                        controlled.streamConfigAsset = profile;
                         controlled.sourceCamera = visuals.CreateSourceCamera();
                         controlled.gameListener = observer.GetComponent<AudioListener>();
                         controlled.audioSignal = new GameObject("游戏测试音_非麦克风").AddComponent<DemoAudioSignal>();

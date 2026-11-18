@@ -2,6 +2,8 @@
 
 > 命名空间：`MyVerseXRSDK`。本主版本不兼容 3.x C# API；后端 Protobuf、区域轴向和账务字段语义保持不变。版本号见 `package.json`，发布状态见 CHANGELOG。
 
+**如果你还没有看到过设备入房，先照着[第一次接入](getting-started.md)跑通 01。** 本文适合已经能打开示例、准备把某项功能接进自己场景的读者。可以跳着看：[空间与节点](#space-rig) · [准入、扣费、录制](#business-commands) · [直接推流或中控推流](#streaming-routes) · [按现象排错](#troubleshooting)。需要准确签名、单位或默认值时再查 [API 参考](api-reference.md)。
+
 ## 1. 架构与能力
 
 ```text
@@ -23,7 +25,7 @@ MVXRSDK.Create(SdkOptions) → SdkClient
 
 ## 2. 安装与依赖
 
-Unity 2022.3 LTS，URP 为必需依赖。包清单声明：
+接入方的最低版本是 Unity 2022.3 LTS，URP 为必需依赖。开发用宿主工程为 Unity 6.3 LTS（`6000.3.15f1`），显式选用 URP 17.3.0、Unity WebRTC 3.0.0；这不是对所有业务工程的新下限。不要在 2022.3 中强装仅支持 Unity 6 的 WebRTC 稳定版。下面是 **SDK 自身**保留的依赖基线：
 
 | 包 | 版本 |
 |---|---|
@@ -56,6 +58,16 @@ SDK 不直接引用 PICO 程序集；设备身份获取、XR Plug-in Management 
 - **Directory**（正式，默认）：固定POST `http://localhost:8868/v1/vr/service/config`取得中控地址，再轮询分配、连接房间WS、登录。IP、端口和接口路径内置固定，接入方无需填写地址。
 - **ControlServer**：显式设置 `Session.ControlServerUrl`，跳过本机目录。这里传**中控 HTTP(S) 地址，不是房间 WS 地址**。
 - **External**：不建立原生网络连接；调用 `Session.OpenExternalSession(sessionKey)` 取得专属数据写入句柄。
+
+### 我拿到的地址应该填在哪里？
+
+| 地址 | 谁给的？填在哪里？ |
+|---|---|
+| 本机目录（HTTP） | 仅 `Directory` 使用，SDK 已写好；不需要填。它回答“这台设备应去找哪台中控？” |
+| 中控基地址（HTTP 或 HTTPS） | `ControlServer` 测试模式下填 `Control Server Url`，只到中控服务的基地址。它回答“这个设备现在被分到哪个房间？” |
+| 房间连接地址（WS 或 WSS） | 中控轮询响应里下发，SDK 自动连接。用于房间消息，不是手填的中控地址。 |
+| WHIP 推流端点（HTTP 或 HTTPS） | 04 在 Play 临时输入；07 由中控通知下发。用来发起媒体会话，不是房间 WS，也不能用观众的播放链接代替。 |
+| 账务端点（HTTP 或 HTTPS） | 仅接自助扣费时才关心。直连模式可设置 `Session.BillingBaseUrl`；正式目录响应提供 `data.baseUrl`。不要把中控或推流地址当成账务地址。 |
 
 ### 正式与测试的共同连接流程
 
@@ -105,7 +117,20 @@ if (!started.Success) { Debug.LogError(started.Message); client.Dispose(); }
 
 保留 `client` 和 `binding.Handle`。切换 XR 层级时可事务式重新 BindRig；旧句柄释放不会解除新绑定。场景卸载前释放绑定，客户端本身可跨场景；整个业务结束时再 Shutdown。不要手动销毁 SDK 调度宿主。
 
+<a id="space-rig"></a>
+
 ## 4. 空间坐标与节点所有权
+
+**先想象现场有一根真实的柱子。** 中控知道它在房间里的位置，游戏知道地图画在哪里，头显只知道玩家相对追踪原点走了多远。空间校准要让这三件事对得上，不是把整张地图搬到玩家脚下。所以地图不动，SDK 只调整头手上方的一层专用空节点（`CalibrationRoot`），让同一根柱子在头显里出现在正确的方向。
+
+| Inspector 要绑的节点 | 谁控制它 | 一个具体例子 |
+|---|---|---|
+| `Motion Root` | 游戏业务 | 游戏让玩家乘电梯、整体移动时，动这一层。 |
+| `Calibration Root` | SDK | 在业务根与追踪根之间留一个空对象，初始局部位置为零、旋转为单位旋转。不要用动画或每帧脚本改写它。 |
+| `Tracking Root` | XR 系统或宿主 | 放追踪原点或 Camera Offset；站姿高度和追踪偏移留在这里。 |
+| `Head`，以及可选的左右手 | 头显或模拟输入 | `Head` 指实际跟踪的头节点。不要传观察地图的旁观相机，更不要用推流相机代替。 |
+
+例如中控下发长 12 m、宽 6 m 的区域，SDK 到**当前激活环境**的地块组查找 `6x12`，不是 `12x6`。入房但找不到这条数据时，先到[地块工具](editor-tools-guide.md)核对规格和环境；不要通过手动移动地图“对齐”两个错误的参照系。
 
 推荐层级：
 
@@ -145,7 +170,7 @@ C.position = inverse(q) × (−t)
 - 计算成功不等于应用成功，分别看 `TryGetCalibration` 与 `Status.IsApplied`。
 - 重连时保持上一 C，但标记为陈旧，不继续把它当作有效上报参考帧；等待新代次有效区域。
 - 外部改写 CalibrationRoot 会失去应用有效性，SDK 不抢写覆盖业务数据。
-- XR recenter/追踪原点改变后调用 `InvalidateTrackingOrigin()`；External 模式必须重新开会话并提供新帧数据。
+- 业务确认 XR 追踪原点改变后，显式调用 `InvalidateTrackingOrigin()` 撤销旧空间参考帧。它不重置硬件，也不取消正在进行的查中控或等待分房；External 模式必须重新开会话并提供新帧数据。
 
 ### 区域、障碍物与虚影
 
@@ -174,11 +199,22 @@ writer.UpsertDevice(1, devicePose);
 // 位姿、障碍物、区域和Live各有独立revision；设备域不是每个device独立计数。
 ```
 
-输入限主线程，revision 必须递增。非法输入不消耗 revision；旧代次返回 `StaleGeneration`。不要把服务器 PB 对象暴露到业务层或绕过 writer 调内部服务。
+输入限主线程，revision 必须递增。例如区域尺寸无效，writer 拒绝 `ApplyRegion(1, ...)`，修正后仍可用 1；若结构正确但本地缺对应地块，writer 已接受 1，空间却未就绪，重复 1 返回 `StaleGeneration`，下次写入用 2。旧代次同样不能写入。不要把服务器 PB 对象暴露到业务层或绕过 writer 调内部服务。
 
 External 联调开流使用 `writer.NotifyLive(revision, fullWhipUrl, true)`，停流传 false。URL 必须是完整 HTTP(S) WHIP 地址，不是单独 IP。此操作会真实创建媒体会话，不是纯画面模拟；不要把含凭据的地址写日志。
 
+<a id="business-commands"></a>
+
 ## 6. 游戏准入、扣费与远端命令
+
+这几种操作都可能出现在“一局游戏”里，但不是必须串行执行的流程：
+
+| 现场需求 | 谁发起、谁负责结果 |
+|---|---|
+| “中控点了开始，让游戏进入下一步” | 03 监听 `Admission.StartRequested`；收到通知后由你的游戏决定是否加载关卡。通知本身不发扣费请求。 |
+| “我们的产品有自助扣费入口” | 业务显式调用 `Billing.VerifyAccess`。需要已运行的客户端和有效账务端点；单是连上中控不等于已扣费。不做自助计费的项目不用调用它。 |
+| “请把设备 A 接下来的 10 秒录下来” | 这是 03 的独立远端录制。填写 `Recording Target Id`，执行 `业务/远端录制10秒`；示例留空时用本机 `Device Id`。不需要先申请导演机位，也不会在 Unity 本地生成视频文件。 |
+| “中控如果选中这个镜头，请同时录制” | 这是 07 的机位请求参数 `Record` / `FileName`，不是上面那条独立录制命令。机位可能未中选，结果要在中控侧确认。 |
 
 `Admission.StartRequested`通知本机开始游戏请求，由业务处理开局；SDK不在这条链中发扣费HTTP。中控启动与自助扣费是不同接入方式，不应把收到中控通知自动串接成一次自助扣费。
 
@@ -188,7 +224,21 @@ External 联调开流使用 `writer.NotifyLive(revision, fullWhipUrl, true)`，�
 
 录制按目标类型和目标 Id 做在途互斥：不同目标可并发。`Recording.Start` 成功只表示命令受理，不表示文件已完成。SDK 不做本地视频录制，也没有主动 StopRecord。
 
+<a id="streaming-routes"></a>
+
 ## 7. 导演、画面源与游戏音
+
+**先确定谁决定开播，再配地址和相机。** WHIP 地址是媒体服务器接收视频的入口，不是观众播放地址。`Source Camera` 决定“拍什么”，`Stream Config Asset` 决定“以什么画质发送”，它们都不能代替“开始”命令。
+
+| | 04：自己决定推到哪里 | 07：中控决定播哪个机位 |
+|---|---|---|
+| 需要什么服务 | 局域网内的 WHIP 接收服务；不用中控房间 | 中控房间与接收服务；先确认设备已入房 |
+| 人填什么地址 | 完整 HTTP(S) 推流端点；含鉴权信息时只用 Play 的「临时 WHIP 地址」，不要写入场景 | 仅测试直连时填中控 HTTP(S) 地址；不手填 WHIP，开播时由中控下发 |
+| 点击哪里 | Play → `StreamingExample` Inspector → `使用临时地址开始直推`；无凭据预设也可用组件菜单 `推流/开始直推` | Play → Joined → `ControlledStreamingExample` 组件菜单 → `推流/按配置申请中控机位` |
+| 谁控制停止 | `推流/停止直推`；仅清除画面源不会停流 | 中控的 `NotifyLive` 通知控制正常开停；取消申请等待不会停止现有流 |
+| 怎样算成功 | 接收端实际看到独立相机的画面 | 申请受理后还要等中控选用、本机媒体连接，并在接收端确认画面 |
+
+**例：要申请一个播 30 秒的游戏镜头。** 在 07 的 `Streaming Request` 里选 `Source = unity`、`Lenses = 1`、`Duration Seconds = 30`，给 `Source Camera` 指定独立相机，再发请求。30 秒是**申请值**，不是本地倒计时停流。若申请的是中控原直播，`Source` 留空或填 `mr`，示例不会把本地相机附在请求上。不想推流、只想让设备录制 10 秒，则用 03，无需经过 07。
 
 ### 显式启用与首次开流
 
@@ -235,15 +285,31 @@ client.Director.Request(new DirectorRequest
 
 手动源默认跨正常停流保留；场景卸载前必须 `ClearSource()`，随后再销毁借用相机或 RT。相机 targetTexture 被业务重新接管后，SDK 不覆盖业务的新设置。
 
+### 推流媒体配置：创建、放置与加载
+
+**推流配置资产是可选的。** 随包 `04_Streaming`、`07_ControlledStreaming` 的入口均有「推流配置（可选）」字段，预先引用示例目录内的 `Config/EditorDemoStreamConfig.asset`；清空它即可体验 SDK 默认画质。`StreamConfigAsset` 是 Unity `ScriptableObject` 资产，不是头显上的 JSON。SDK **不按文件名或目录自动查找**。不用资产且不覆盖 `SdkOptions.Media` 时，默认输出 **1280×720、30fps、H.264**，视频码率配置上限 3500、下限 1500 kbps。完整参数见 [MediaOptions 默认值](api-reference.md#mediaoptions)。媒体参数不会启用推流，也不包含 WHIP 地址。
+
+1. 在业务工程的 Project 窗口选一个普通资源目录，例如 `Assets/Configs/Streaming/`（名称、位置均可自定，不要放在 `Editor/`）。右键 **Create → MyVerse XR SDK → Stream Config**，生成例如 `PicoStreaming.asset`，选中后编辑参数。
+2. **创建时应用（推荐）**：在负责创建客户端的场景组件上声明 `[SerializeField] private StreamConfigAsset streamConfig;`，将资产拖到该组件的 Inspector 字段。场景或其引用的 Prefab 随包构建时，Unity 会把引用的资产作为依赖一起打包并加载；无需 `Resources.Load`、`StreamingAssets` 或 ADB 推送。业务初始化时使用：
+
+   ```csharp
+   // options 为业务已有配置，包含 DeviceId 和会话参数。
+   options.EnableStreaming = true;
+   if (streamConfig != null) options.Media = streamConfig.ToMediaOptions();
+   var client = MVXRSDK.Create(options);
+   ```
+
+3. **已有客户端**：也可把资产拖到场景 `MVXRStreamRig` 的「推流配置 Asset」，然后显式调用 `rig.Bind(client)` 并检查结果；只拖入资产不会应用。需要非默认 `AudioBufferSamples` 时，必须在创建客户端前按第 2 步设置。改动资产不会自动更新已创建的客户端，动态更新规则见下节。
+
 ### 音频与配置
 
 音频只有游戏音，不采麦克风。使用 `CaptureGameAudio(listener)` 取得可释放绑定句柄，或调用 `PushGameAudioPcm(pcm, sampleRate, channels)`。支持 8000–192000Hz、mono/stereo；stereo 折叠为 mono，连续重采样，有界缓冲写满丢最旧、读空补零。
 
 `MVXRStreamRig.Bind(client)`显式绑定已启用推流的实例，应用`StreamConfigAsset`完整媒体参数并采集指定Listener；禁用客户端返回Unavailable，不改变原绑定。配置资产不会授予推流能力；组件不拥有主相机或切镜编排。禁用时CaptureGameAudio抛InvalidOperationException，PushGameAudioPcm返回Unavailable，不添加采集组件或分配音频缓冲。
 
-`ApplyConfiguration` 要求 Version 递增：采集节流和重试策略即时更新；协商参数下一媒体会话生效。更改输出尺寸前须无媒体会话且已清源；音频环形缓冲容量仅创建客户端时配置。
+`ApplyConfiguration` 要求 Version 递增：采集节流和重试策略即时更新；协商参数下一媒体会话生效。恢复期间只改 FPS 不延后已排定的重试；改当前重试间隔则从失败时刻重新计算。更改输出尺寸前须无媒体会话且已完成清源，在换源回调中改尺寸返回 `Busy`；音频环形缓冲容量仅创建客户端时配置。
 
-关闭先阻止新音频写入和 native 使用，再等待在途回调归零。等待过久报告 `AudioDrainStalled`，仍保持 Stopping，不靠超时强行释放音轨。
+关闭先阻止新音频写入和 native 使用，再等待在途回调归零。只有音频回调仍在途且等待过久才报告 `AudioDrainStalled`；仅等待统计不会触发该告警，仍保持 Stopping，不靠超时强行释放音轨。
 
 ### WHIP 与平台边界
 
@@ -274,9 +340,27 @@ client.Director.Request(new DirectorRequest
 7. 区分准入、扣费、导演受理、媒体连接、录制文件完成，不能沿用旧 bool 事件推断后续阶段。
 8. `ShowNetworkFailureHud` 默认 true；终态失败且已绑定 Head 时显示，换绑/结束/释放自动收敛。自定义业务 UI 可关闭它。
 
-## 9. 验证范围
+<a id="troubleshooting"></a>
 
-测试位于宿主 `Assets/Tests`，不随 SDK 分发。EditMode 验证算法、状态、所有权、协议映射和 Editor 用例；PlayMode 验证真实帧驱动、销毁和异步关闭。替身媒体测试不等于硬件编码通过。
+## 9. 按现象排查
+
+先找**最后一次成功的步骤**。例如 01 已经 `Joined` 而 02 没有柱子，优先查空间，不要重新换中控 IP。排错时保留状态名、错误码和发生顺序；对外分享日志前，去掉现场地址、令牌和设备身份。
+
+| 现象 | 先检查什么 | 下一步 |
+|---|---|---|
+| 打开场景就报 `InvalidArgument` | 直连模式的 `Control Server Url` 是否为空或缺 `http(s)://`，`Device Id` 是否有效 | 编辑态改 Inspector，再进入 Play。示例不会自动切到离线数据。 |
+| Directory 在发现阶段失败 | `localhost` 指的是当前运行设备；固定接口能否返回有效目录配置 | 开发机没部署本机服务时，有中控基地址可改用 `ControlServer` 联调。不要把房间 WS 填成中控地址。 |
+| 一直 `Allocating`，还没 `Joined` | 若 `Session.LastError` 报网络或响应错误，先查中控地址、网络和响应；若 `Data.CenterIp` 是空字符串，则是未分房或房间已解散 | 在中控网页核对房间、设备标识和拉入操作。这个阶段不是靠手动点多次“连接”推进的。 |
+| 已 `Joined`，但校准无效或地面未显示 | 看 `Space.Status.State` 和 `Reason`。检查完整 Rig、祖先缩放、区域数据、地块 ID 与环境组 | `MissingRegionTile` 先查地块；`ExternalCalibrationWrite` 先找是否有其他脚本改了 `CalibrationRoot`。校准有效后，再核对区域是否要求显示地面。 |
+| 04 本地有图，接收端没图 | “仅准备本地画面”不会联网。确认填的是 WHIP 推流端点而非播放页、在 Play 中点了“开始直推” | 依次看 `Streaming.State`、有效统计 `Statistics.IsValid`、接收端画面。预览只能证明本机画面源工作。 |
+| 07 机位申请受理，但没开流 | 看中控是否选中本机并下发 `NotifyLive`。对于 `unity` 来源，检查独立相机；对于原直播，不应期待本机游戏相机开播 | 首次开流因无有效源被拒时，先补源，再等**新的**开流通知。不要用黑帧选项掩盖相机接线错误。 |
+| 远端有画面但没声音 | 画面源与游戏音是两条输入。确认示例启用了音频菜单、使用有效 `AudioListener` 或主动 PCM；游戏音不是麦克风 | 在接收端听测试音，再换成真实游戏音。别只凭输入 API 成功就判断收端有声。 |
+| 请求超时，不确定是否扣费或录制 | 查看 `OperationResult.RemoteOutcomeUnknown` 以及 `RequestId`、目标和时间 | 若远端结果未知，先向对应服务核实；不要自动重发，`Cancel()` 也不是退款或撤销录制。 |
+| 换场景后 `Create` 提示已有客户端 | 看上一实例是不是仍在运行或 `Stopping` | 要保留会话就只重绑 Rig；确实要重建则等待旧实例关闭完成。不要在主线程循环等待。 |
+
+## 10. 验证范围
+
+随包提供的是七个接入示例，不含宿主的历史全量测试。工程仓的分发工具在独立工程实际安装包、导入示例，并用 `tools/release/EditorDemoSceneTests.cs` 检查场景行为。接入方无需寻找旧 `Assets/Tests/` 目录。Editor 中看到正确的状态或预览，不等于硬件编码、接收端或现场坐标已通过验收。
 
 实例日志通过创建配置`SdkOptions.Logging.Sink`注入，包含状态变化、告警和捕获异常；支持等级过滤、独立Unity输出开关、有界主线程延后派发及关闭排空。日志开关不改变业务错误结果或事件。`Diagnostics.DroppedLogCount`可观察sink积压丢弃；sink自身异常/递归与超限提示走Unity兜底。该出口不接管Editor、宿主或引擎原生日志，详细默认值与脱敏边界见API参考。
 

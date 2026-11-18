@@ -10,6 +10,18 @@
 - 客户端拥有其域服务，不要独立 Dispose 某个域后继续复用整个客户端。业务释放客户端、绑定/采集句柄及未被接受的源适配器即可。
 - 配置和数据快照不长期借用调用者可变数组；Camera、Transform、Prefab、RenderTexture、地块源对象按各自契约借用。
 
+### 怎么读返回值：看这次调用答的是哪一个问题
+
+| 拿到的东西 | 举例 | 应该如何使用 |
+|---|---|---|
+| `SdkResult`：这一步的结果 | `client.Start()` | 先查 `Success`，失败看 `Code`、`Message`。启动成功后要看房间状态，不能直接显示“已入房”。 |
+| `bool` 和 `out` 值：现在有没有可用数据 | `client.Space.TryGetRoomPose(out var pose)` | 只有返回 `true` 才使用 `pose`。`false` 不是“玩家在原点”，不要把默认值当成坐标上报。 |
+| 需要释放的句柄 | `Space.BindRig(...)` 成功后的 `Handle`、`Streaming.CaptureGameAudio(...)` 的返回值 | 它代表**这一次绑定**。离开场景时释放自己的句柄，不要销毁 SDK，也不要释放后来替换它的新绑定。 |
+| `OperationHandle`：对一条远端命令的本地跟踪 | `Billing.VerifyAccess`、`Director.Request`、`Recording.Start` | 返回句柄不等于成功；看完成回调的 `OperationResult`。例如录制请求受理了，仍要在服务端核对文件。 |
+| `SourceSetResult`：谁负责收尾 | `Streaming.TrySetSource(source)` | `Accepted`：下次用 `ClearSource()` 让 SDK 放手；`Busy` / `Invalid`：SDK 没接管，候选适配器仍由创建者释放。 |
+
+第一次写接入脚本？先看[可直接挂到场景上的连接示例](getting-started.md)，不需要先背完整接口。
+
 ### 按接入任务查找API
 
 | 任务 | 入口 | 成功判断与后续责任 |
@@ -66,7 +78,7 @@ RemoveDevice(long revision, string deviceId);
 NotifyLive(long revision, string url, bool start);
 ```
 
-Dispose 结束它仍拥有的会话，不影响替换它的新会话。各域 revision 必须递增；设备新增/更新/删除共用设备域 revision。非法值不消耗 revision，旧租约不能写入新代次。NotifyLive 的 start 地址为完整 HTTP(S) WHIP URL。
+Dispose 结束它仍拥有的会话，不影响替换它的新会话。各域 revision 必须递增；设备新增/更新/删除共用设备域 revision。writer 拒绝结构非法的输入不消耗 revision。例如第一次 `ApplyRegion(1, ...)` 因区域尺寸无效被拒，修正后仍可用 1。若结构合法但找不到地块，writer 已接受并消耗 1；重复 1 返回 `StaleGeneration`，重新提交用 2，并独立查看 `Space.Status.IsApplied`。旧租约不能写入新代次。NotifyLive 的 start 地址为完整 HTTP(S) WHIP URL。
 
 ## 4. 空间与设备
 
@@ -79,7 +91,7 @@ Dispose 结束它仍拥有的会话，不影响替换它的新会话。各域 re
 | `TryGetRoomPose(out Pose)` | bool | 当前应用参考帧下的本机R位姿 |
 | `TryRoomToWorld(Pose, out Pose)` | bool | 通过当前B×C转换；参考帧不可用或位姿非法时false，输出default |
 | `TryWorldToRoom(Pose, out Pose)` | bool | 通过当前(B×C)逆变换；包含业务移动，失败边界同上，不修改节点 |
-| `InvalidateTrackingOrigin()` | void | 撤销原点改变前的数据代次 |
+| `InvalidateTrackingOrigin()` | void | 业务显式撤销旧空间参考帧；不触发硬件重置，不打断尚未完成的目录发现或分房 |
 | Status | `SpatialStatus` | State、HasCurrentResult、IsApplied、IsCurrent、Reason |
 | LastRejectedInput | `SdkResult` | 最近一次被拒的空间输入 |
 | Changed | `Action<SpatialStatus>` | 空间状态 |
@@ -128,7 +140,11 @@ OperationHandle RecordingService.Start(RecordingRequest request, Action<Operatio
 
 `OperationHandle`：RequestId、TargetId、IsCompleted、Outcome，`void Cancel()`。Cancel 不能撤销远端动作。
 
-`OperationResult`：RequestId、TargetId、Result、Success、WasCached、RemoteOutcomeUnknown。远端结果未知时不能把请求当作从未发生；这些非幂等命令不自动重试。
+`OperationResult`：RequestId、TargetId、Result、Success、WasCached、RemoteOutcomeUnknown。这里的“非幂等”是指**同样的请求再发一次，可能再扣一次费或再触发一次动作**。可按以下顺序处理一次完成回调：
+
+1. `RemoteOutcomeUnknown == true`：客户端没拿到可信的最终应答。提示“结果待核实”，保留 `RequestId` 和目标以便排查，不自动重发。
+2. `Success == false` 且结果不是未知：按 `Result.Code` 区分参数不合法、尚未连接、已有请求在途或远端明确拒绝。先纠正条件，不写统一的无限重试。
+3. `Success == true`：按业务解释。账务 `WasCached == true` 表示复用了**这个客户端**先前的成功，不是又发了一次扣费；导演受理后等中控选择；录制受理后到远端核对文件。
 
 ## 6. 推流
 
@@ -152,6 +168,8 @@ StreamingState：`Idle / Starting / Streaming / Recovering / Stopping / Failed`�
 SourceSetResult：Accepted（转移所有权）、Busy、Invalid（后两者不接管、不Dispose输入）。禁用时TrySetSource返回Invalid，不分配输出；推流中已有不同源时Busy，同源幂等。禁用时CaptureGameAudio抛InvalidOperationException，PushGameAudioPcm返回Unavailable，Rig.Bind返回Unavailable；GetConfiguration/ApplyConfiguration可管理参数但不能开启能力。
 
 `StreamingStatistics`：SessionEpoch、Timestamp、IsValid、VideoBitrateKbps、AudioBitrateKbps、TotalBitrateKbps、RttMilliseconds、PacketsLost。停止后统计失效；不要把旧统计当成新会话数据。
+
+**看统计时分两步：** 先查 `Streaming.Statistics.IsValid`，再读码率、丢包或往返时间。`VideoBitrateKbps` 是观测值，不是你在配置里填的码率上限。停流后不要继续显示上一会话的数字；即使统计有效，验收仍要看接收端是否显示了正确机位、是否听到了期望的游戏音。
 
 ### 画面适配与装配组件
 
@@ -210,6 +228,8 @@ PCM 可在音频线程写入：8k–192kHz，1或2声道、完整采样帧。调
 
 ### MediaOptions
 
+`StreamConfigAsset` 是可选的。不创建资产、也不覆盖 `SdkOptions.Media` 时，SDK 使用下表默认值（不要显式设为 `null`）。要允许本机推流，仍须在 `MVXRSDK.Create` 前设置 `EnableStreaming = true`；这不会自动开流或提供 WHIP 地址。有资产时，可在创建前用 `options.Media = streamConfig.ToMediaOptions()` 一次性传入整份配置。
+
 | 配置 | 默认值/约束 |
 |---|---|
 | AllowBlackFrameStart | false；仅显式允许新的控制会话无源黑帧启动，不影响运行中清源 |
@@ -227,7 +247,7 @@ PCM 可在音频线程写入：8k–192kHz，1或2声道、完整采样帧。调
 | AudioBufferSamples | 32768；正数，仅Create时可设 |
 | RetryDelaysMilliseconds | `[2000,5000,10000]`；元素非负，空数组禁用媒体恢复，不能为null |
 
-浮点超时/间隔须有限正数。协商参数按媒体尝试捕获；更新不缩短当前握手期限。变更输出尺寸须无会话并已清源。
+浮点超时/间隔须有限正数。协商参数按媒体尝试捕获；更新不缩短当前握手期限。变更输出尺寸须无会话并已清源；换源回调内改尺寸返回 `Busy`，不消耗配置版本。恢复中只改 FPS 不推迟重试；改当前重试间隔，从本次失败时刻重算。
 
 ## 8. 诊断与错误码
 

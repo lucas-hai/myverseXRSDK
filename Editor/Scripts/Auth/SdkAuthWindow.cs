@@ -148,7 +148,7 @@ namespace MyVerseXRSDK.Editor
             m_AccessToken = EditorGUILayout.PasswordField("AccessToken", m_AccessToken);
 
             if (cred != null && cred.verified)
-                EditorGUILayout.HelpBox($"{SdkAuthStore.EnvDisplayName(env)}已验证通过。重新验证会覆盖该环境已保存的凭据。", MessageType.Info);
+                EditorGUILayout.HelpBox($"{SdkAuthStore.EnvDisplayName(env)}上次验证时令牌有效，尚未确认此 AppId 权限。重新验证会覆盖该环境已保存的凭据。", MessageType.Info);
             else
                 EditorGUILayout.HelpBox($"{SdkAuthStore.EnvDisplayName(env)}尚未验证。", MessageType.Warning);
             if (!string.IsNullOrEmpty(m_ErrorMessage))
@@ -202,7 +202,7 @@ namespace MyVerseXRSDK.Editor
                     return;
                 }
                 m_ErrorMessage = null;
-                ShowNotification(new GUIContent("验证通过"));
+                ShowNotification(new GUIContent("令牌有效，尚未确认此 AppId 权限"));
                 Repaint();
             });
         }

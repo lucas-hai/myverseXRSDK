@@ -9,10 +9,14 @@ namespace MyVerseXRSDK.EditorDemos
         public ControlConnectionMode connectionMode = ControlConnectionMode.ControlServer;
         [Tooltip("设备标识须属于中控设备管理；先由网页控制台开房并拉入")]
         public string deviceId = "editor-controlled-stream", controlServerUrl = "";
+        [Tooltip("仅 Source 为 unity 时需要：申请本地机位使用的独立相机。其他来源不附带相机。")]
         public Camera sourceCamera;
         public AudioListener gameListener;
         public DemoAudioSignal audioSignal;
-        public int durationSeconds = 10;
+        [Header("中控机位申请参数")]
+        public DirectorRequestSettings streamingRequest = new DirectorRequestSettings();
+        [Header("推流配置（可选）"), Tooltip("无需创建配置资产。留空使用 SDK 默认值：1280×720、30fps、H.264；指定资产则在创建客户端时读取整份配置。")]
+        public StreamConfigAsset streamConfigAsset;
         public SdkClient Client { get; private set; }
         public OperationHandle DirectorOperation { get; private set; }
         private AudioCaptureHandle audioCapture;
@@ -45,8 +49,13 @@ namespace MyVerseXRSDK.EditorDemos
                 },
                 Spatial = new SpatialOptions { Mode = SpatialMode.Disabled, ShowObstacles = false, ShowFloor = false },
                 Devices = new DeviceOptions { ReportingEnabled = false, AvatarsEnabled = false },
-                Media = new MediaOptions { OutputLongSide = 640 }, ShowNetworkFailureHud = false,
+                ShowNetworkFailureHud = false,
             };
+            try
+            {
+                if (streamConfigAsset != null) options.Media = streamConfigAsset.ToMediaOptions();
+            }
+            catch (ArgumentException error) { return SdkResult.Fail(SdkErrorCode.InvalidArgument, error.Message); }
             try { Client = MVXRSDK.Create(options); }
             catch (ArgumentException) { return SdkResult.Fail(SdkErrorCode.InvalidArgument, "检查设备标识和完整中控HTTP(S)地址"); }
             catch (InvalidOperationException) { return SdkResult.Fail(SdkErrorCode.Busy, "其他客户端尚未释放"); }
@@ -56,16 +65,17 @@ namespace MyVerseXRSDK.EditorDemos
             return result;
         }
 
-        /// <summary>向中控申请独立相机镜头；受理后仍等待NotifyLive，不能在回调中自行开流。</summary>
+        /// <summary>按Inspector配置向中控申请机位；受理后仍等待NotifyLive，不能在回调中自行开流。</summary>
         public OperationHandle RequestDirector()
         {
             if (!Running || !Client.Session.Current.IsJoined) { Debug.Log("等待真实中控分配房间并登录为Joined。", this); return null; }
-            if (sourceCamera == null) { Debug.Log("未配置独立推流相机。", this); return null; }
             if (DirectorOperation != null && !DirectorOperation.IsCompleted) return DirectorOperation;
+            if (streamingRequest == null) { Debug.LogWarning("请先配置中控机位申请参数。", this); return null; }
+            if (streamingRequest.source == "unity" && sourceCamera == null)
+            { Debug.LogWarning("Source 为 unity 时需要配置独立推流相机。", this); return null; }
             var owner = Client;
             // AutoCamera由SDK在中控通知开流时接管，不能把请求受理当成相机开始渲染。
-            DirectorOperation = Client.Director.Request(new DirectorRequest
-            { Source = "unity", AutoCamera = sourceCamera, DurationSeconds = durationSeconds }, result =>
+            DirectorOperation = Client.Director.Request(streamingRequest.CreateRequest(sourceCamera), result =>
             {
                 if (this == null || !ReferenceEquals(Client, owner)) return;
                 Debug.Log($"导演请求#{result.RequestId}：{result.Result.Code}；远端未知={result.RemoteOutcomeUnknown}。\n受理不等于中选/开流，等待中控NotifyLive。", this);
@@ -106,7 +116,7 @@ namespace MyVerseXRSDK.EditorDemos
                 DemoConsole.Result(this, "断开并安全停流", result);
             });
         }
-        [ContextMenu("推流/向中控申请独立相机镜头")]
+        [ContextMenu("推流/按配置申请中控机位")]
         private void RequestFromMenu() => RequestDirector();
         private void OnGUI() => ui.DrawPreview(sourceCamera != null ? sourceCamera.targetTexture : null);
         private void OnDestroy()

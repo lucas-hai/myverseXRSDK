@@ -10,6 +10,7 @@ namespace MyVerseXRSDK
         event Action<SdkResult, bool> Failed;
         event Action<StreamingStatistics> Statistics;
         bool IsReleased { get; }
+        bool AudioDrainPending { get; }
         void Start(RenderTexture output, long sessionEpoch);
         void SetAnswer(string answer);
         void Tick();

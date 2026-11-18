@@ -16,6 +16,8 @@ namespace MyVerseXRSDK
         private bool endRequested;
         internal IStreamSource Current { get; private set; }
         internal bool IsReleased => disposed && !mutating && Current == null;
+        // 解绑回调期间 Current 已为空，但外层换源仍借用原输出。
+        internal bool CanResizeOutput => !disposed && !mutating && Current == null;
         internal bool HasAvailableSource
         {
             get

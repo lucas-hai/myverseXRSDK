@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6ed9e6817ddd7de43a1cfc8cefe1a949, type: 3}
+  m_Name: EditorDemoStreamConfig
+  m_EditorClassIdentifier: MVXRSDK.Runtime::MyVerseXRSDK.StreamConfigAsset
+  StreamMaxLongSide: 640
+  Fps: 30
+  VideoBandwidthKbps: 3500
+  VideoMinBitrateKbps: 1500
+  ForceH264: 1
+  AllowBlackFrameStart: 0
+  ConfigurationVersion: 1
+  IceGatheringTimeoutSeconds: 3
+  HttpTimeoutSeconds: 30
+  HandshakeTimeoutSeconds: 150
+  DisconnectedGraceSeconds: 5
+  StatisticsIntervalSeconds: 1
+  RemoteCleanupSeconds: 2
+  AudioDrainWarningSeconds: 5
+  AudioBufferSamples: 32768
+  RetryDelaysMilliseconds: d00700008813000010270000

@@ -879,7 +879,13 @@ MonoBehaviour:
   sourceCamera: {fileID: 1136265368}
   gameListener: {fileID: 1254531840}
   audioSignal: {fileID: 323960956}
-  durationSeconds: 10
+  streamingRequest:
+    source: unity
+    lenses: 1
+    durationSeconds: 10
+    record: 0
+    fileName: 
+  streamConfigAsset: {fileID: 11400000, guid: 4ed38cd1308bc214c955e71bd9a81908, type: 2}
 --- !u!4 &382781020
 Transform:
   m_ObjectHideFlags: 0

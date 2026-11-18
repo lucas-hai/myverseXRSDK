@@ -26,6 +26,7 @@ namespace MyVerseXRSDK
         private double disconnectedAt = -1;
         private long epoch;
         public bool IsReleased { get; private set; }
+        public bool AudioDrainPending => closing && pump != null && !pump.IsDrained;
         public event Action<string> LocalOffer;
         public event Action Connected;
         public event Action<SdkResult, bool> Failed;

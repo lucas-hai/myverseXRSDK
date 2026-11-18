@@ -46,7 +46,7 @@ namespace MyVerseXRSDK.Editor
 
         /// <summary>
         /// 全工程查找地块数据资产：多个时**优先运行时契约路径**（Resources/MVXRSDK/LocalRegionData.asset）——
-        /// 环境同步/重新封签/出包校验都要落在运行时真正加载的那份资产上，盲取第一个会操作错资产。
+        /// 仅用于编辑和迁移；无契约资产时可选旧资产，构建校验不能使用此回退。
         /// 不存在返回 null。
         /// </summary>
         internal static LocalRegionDataList FindDataList()

@@ -18,6 +18,7 @@ namespace MyVerseXRSDK
         private readonly List<string> scanIds = new List<string>();
         private GameObject prefab;
         private float nextVisibilityScan;
+        private Vector2? lastScanOrigin;
         private bool sameRoom;
         private float sameRoomDistance;
         private bool disposed;
@@ -81,7 +82,7 @@ namespace MyVerseXRSDK
         private void OnDevice(long epoch, DevicePose device)
         {
             if (epoch != session.Current.Epoch || device.DeviceId == runtime.Options.DeviceId) return;
-            RefreshVisibility();
+            RefreshVisibility(device.DeviceId);
         }
 
         private void OnRemoved(long epoch, string id)
@@ -100,34 +101,43 @@ namespace MyVerseXRSDK
         private void OnBindingChanging() { reporter.Invalidate(); ClearViews(); }
         private void OnSpaceChanged() { reporter.Invalidate(); RefreshVisibility(); }
 
-        private void RefreshVisibility()
+        private void RefreshVisibility(string changedId = null)
         {
             if (disposed || !options.AvatarsEnabled || !space.TryGetRoomPose(out var self) || space.ProxyRoot == null)
             {
                 ClearViews();
                 return;
             }
-            // 实例化自定义Prefab可能触发业务回调；复用键列表避免枚举器在重入更新时失效。
+            var origin = new Vector2(self.position.x, self.position.z);
+            // 本机移动会同时改变与所有人的距离，即使其他设备没有发来新位姿。
+            if (changedId != null && lastScanOrigin.HasValue && lastScanOrigin.Value.Equals(origin))
+            {
+                RefreshDevice(changedId, self.position);
+                return;
+            }
+            lastScanOrigin = origin;
             scanIds.Clear();
             foreach (var id in devices.Keys) scanIds.Add(id);
-            foreach (var id in scanIds)
-            {
-                if (!devices.TryGetValue(id, out var device)) continue;
-                bool belongsHere = device.RoomId == session.Current.RoomId;
-                float distance = belongsHere ? sameRoomDistance : options.OtherRoomDistance;
-                var delta = device.Position - self.position;
-                bool visible = (!belongsHere || sameRoom) && delta.x * delta.x + delta.z * delta.z <= distance * distance;
-                if (!visible) { ReleaseView(id); continue; }
-                var target = new Pose(device.Position, device.Rotation);
-                if (views.TryGetValue(id, out var view) && view != null) { view.SetTarget(target); continue; }
-                views.Remove(id);
-                if (prefab == null) prefab = options.AvatarPrefab != null ? options.AvatarPrefab : Resources.Load<GameObject>("Characters/Prefabs/Role");
-                var instance = pool.Rent(prefab, space.ProxyRoot);
-                instance.name = "Avatar." + id;
-                view = instance.GetComponent<NetworkTransform>() ?? instance.AddComponent<NetworkTransform>();
-                views[id] = view;
-                view.InitializePose(target);
-            }
+            foreach (var id in scanIds) RefreshDevice(id, self.position);
+        }
+
+        private void RefreshDevice(string id, Vector3 selfPosition)
+        {
+            if (!devices.TryGetValue(id, out var device)) return;
+            bool belongsHere = device.RoomId == session.Current.RoomId;
+            float distance = belongsHere ? sameRoomDistance : options.OtherRoomDistance;
+            var delta = device.Position - selfPosition;
+            bool visible = (!belongsHere || sameRoom) && delta.x * delta.x + delta.z * delta.z <= distance * distance;
+            if (!visible) { ReleaseView(id); return; }
+            var target = new Pose(device.Position, device.Rotation);
+            if (views.TryGetValue(id, out var view) && view != null) { view.SetTarget(target); return; }
+            views.Remove(id);
+            if (prefab == null) prefab = options.AvatarPrefab != null ? options.AvatarPrefab : Resources.Load<GameObject>("Characters/Prefabs/Role");
+            var instance = pool.Rent(prefab, space.ProxyRoot);
+            instance.name = "Avatar." + id;
+            view = instance.GetComponent<NetworkTransform>() ?? instance.AddComponent<NetworkTransform>();
+            views[id] = view;
+            view.InitializePose(target);
         }
 
         private void ReleaseView(string id)
@@ -139,6 +149,7 @@ namespace MyVerseXRSDK
 
         private void ClearViews()
         {
+            lastScanOrigin = null;
             foreach (var view in views.Values) pool.Return(prefab, view != null ? view.Object : null);
             views.Clear();
         }
